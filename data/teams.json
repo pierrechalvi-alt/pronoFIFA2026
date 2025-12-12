@@ -1,0 +1,17 @@
+{
+  "groups": ["A","B","C","D","E","F","G","H","I","J","K","L"],
+  "teamsByGroup": {
+    "A": ["MEX", "RSA", "KOR", "DEN/MKD/CZE/IRL"],
+    "B": ["CAN", "ITA/NIR/WAL/BIH", "QAT", "SUI"],
+    "C": ["BRA", "MAR", "HAI", "SCO"],
+    "D": ["USA", "PAR", "AUS", "TUR/ROU/SVK/KOS"],
+    "E": ["GER", "CUW", "CIV", "ECU"],
+    "F": ["NED", "JPN", "UKR/SWE/POL/ALB", "TUN"],
+    "G": ["BEL", "EGY", "IRN", "NZL"],
+    "H": ["ESP", "CPV", "KSA", "URU"],
+    "I": ["FRA", "SEN", "IRQ/BOL/SUR", "NOR"],
+    "J": ["ARG", "ALG", "AUT", "JOR"],
+    "K": ["POR", "COD/JAM/NCL", "UZB", "COL"],
+    "L": ["ENG", "CRO", "GHA", "PAN"]
+  }
+}
