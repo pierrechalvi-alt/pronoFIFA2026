@@ -1,0 +1,45 @@
+{
+  "groupStage": [
+    { "id": 1, "stage": "GROUP", "group": "A", "home": "MEX", "away": "RSA", "date": null, "time": "15:00", "city": null, "stadium": null },
+
+    { "id": 2, "stage": "GROUP", "group": null, "home": "À compléter", "away": "À compléter", "date": null, "time": null, "city": null, "stadium": null }
+  ],
+  "knockout": [
+    { "id": 73, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 73)", "awayLabel": "Qualifié (Seizième 73)", "date": null, "time": "15:00", "city": null, "stadium": null },
+    { "id": 74, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 74)", "awayLabel": "Qualifié (Seizième 74)", "date": null, "time": "16:30", "city": null, "stadium": null },
+    { "id": 75, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 75)", "awayLabel": "Qualifié (Seizième 75)", "date": null, "time": "21:00", "city": null, "stadium": null },
+    { "id": 76, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 76)", "awayLabel": "Qualifié (Seizième 76)", "date": null, "time": "13:00", "city": null, "stadium": null },
+    { "id": 77, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 77)", "awayLabel": "Qualifié (Seizième 77)", "date": null, "time": "17:00", "city": null, "stadium": null },
+    { "id": 78, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 78)", "awayLabel": "Qualifié (Seizième 78)", "date": null, "time": "13:00", "city": null, "stadium": null },
+    { "id": 79, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 79)", "awayLabel": "Qualifié (Seizième 79)", "date": null, "time": "21:00", "city": null, "stadium": null },
+    { "id": 80, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 80)", "awayLabel": "Qualifié (Seizième 80)", "date": null, "time": "12:00", "city": null, "stadium": null },
+    { "id": 81, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 81)", "awayLabel": "Qualifié (Seizième 81)", "date": null, "time": "20:00", "city": null, "stadium": null },
+    { "id": 82, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 82)", "awayLabel": "Qualifié (Seizième 82)", "date": null, "time": "16:00", "city": null, "stadium": null },
+    { "id": 83, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 83)", "awayLabel": "Qualifié (Seizième 83)", "date": null, "time": "19:00", "city": null, "stadium": null },
+    { "id": 84, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 84)", "awayLabel": "Qualifié (Seizième 84)", "date": null, "time": "15:00", "city": null, "stadium": null },
+    { "id": 85, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 85)", "awayLabel": "Qualifié (Seizième 85)", "date": null, "time": "23:00", "city": null, "stadium": null },
+    { "id": 86, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 86)", "awayLabel": "Qualifié (Seizième 86)", "date": null, "time": "18:00", "city": null, "stadium": null },
+    { "id": 87, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 87)", "awayLabel": "Qualifié (Seizième 87)", "date": null, "time": "21:30", "city": null, "stadium": null },
+    { "id": 88, "stage": "KO", "round": "R32", "homeLabel": "Qualifié (Seizième 88)", "awayLabel": "Qualifié (Seizième 88)", "date": null, "time": "14:00", "city": null, "stadium": null },
+
+    { "id": 89, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 74", "awayLabel": "Vainqueur Match 77", "date": null, "time": "17:00", "city": null, "stadium": null },
+    { "id": 90, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 73", "awayLabel": "Vainqueur Match 75", "date": null, "time": "13:00", "city": null, "stadium": null },
+    { "id": 91, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 76", "awayLabel": "Vainqueur Match 78", "date": null, "time": "16:00", "city": null, "stadium": null },
+    { "id": 92, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 79", "awayLabel": "Vainqueur Match 80", "date": null, "time": "20:00", "city": null, "stadium": null },
+    { "id": 93, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 83", "awayLabel": "Vainqueur Match 84", "date": null, "time": "15:00", "city": null, "stadium": null },
+    { "id": 94, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 85", "awayLabel": "Vainqueur Match 87", "date": null, "time": "20:00", "city": null, "stadium": null },
+    { "id": 95, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 86", "awayLabel": "Vainqueur Match 88", "date": null, "time": "12:00", "city": null, "stadium": null },
+    { "id": 96, "stage": "KO", "round": "R16", "homeLabel": "Vainqueur Match 81", "awayLabel": "Vainqueur Match 82", "date": null, "time": "16:00", "city": null, "stadium": null },
+
+    { "id": 97, "stage": "KO", "round": "QF", "homeLabel": "Vainqueur Match 89", "awayLabel": "Vainqueur Match 90", "date": null, "time": "16:00", "city": null, "stadium": null },
+    { "id": 98, "stage": "KO", "round": "QF", "homeLabel": "Vainqueur Match 93", "awayLabel": "Vainqueur Match 94", "date": null, "time": "15:00", "city": null, "stadium": null },
+    { "id": 99, "stage": "KO", "round": "QF", "homeLabel": "Vainqueur Match 91", "awayLabel": "Vainqueur Match 92", "date": null, "time": "17:00", "city": null, "stadium": null },
+    { "id": 100, "stage": "KO", "round": "QF", "homeLabel": "Vainqueur Match 95", "awayLabel": "Vainqueur Match 96", "date": null, "time": "21:00", "city": null, "stadium": null },
+
+    { "id": 101, "stage": "KO", "round": "SF", "homeLabel": "Vainqueur Match 97", "awayLabel": "Vainqueur Match 98", "date": null, "time": "15:00", "city": null, "stadium": null },
+    { "id": 102, "stage": "KO", "round": "SF", "homeLabel": "Vainqueur Match 99", "awayLabel": "Vainqueur Match 100", "date": null, "time": "15:00", "city": null, "stadium": null },
+
+    { "id": 103, "stage": "KO", "round": "BRONZE", "homeLabel": "Perdant Demi 101", "awayLabel": "Perdant Demi 102", "date": null, "time": "17:00", "city": null, "stadium": null },
+    { "id": 104, "stage": "KO", "round": "FINAL", "homeLabel": "Vainqueur Match 101", "awayLabel": "Vainqueur Match 102", "date": null, "time": "15:00", "city": null, "stadium": null }
+  ]
+}
