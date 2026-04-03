@@ -20,8 +20,8 @@ init();
 async function init(){
   try {
     const [teams, matches] = await Promise.all([
-      loadJSON("data/teams.json"),
-      loadJSON("data/matches.json")
+      fetch("./data/teams.json").then(r=>r.json()),
+      fetch("./data/matches.json").then(r=>r.json())
     ]);
     state.teams = teams;
     state.matches = normalizeMatches(matches, teams);
@@ -44,13 +44,6 @@ async function init(){
     }
   }
   render();
-}
-
-async function loadJSON(path){
-  const url = new URL(path, ASSET_BASE_URL).toString();
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Échec chargement ${path} (HTTP ${res.status})`);
-  return res.json();
 }
 
 function normalizeMatches(m, teams){
@@ -82,9 +75,7 @@ function normalizeMatches(m, teams){
 }
 
 function buildGroupStageMatches(teams, providedGroup){
-  const groups = Array.isArray(teams?.groups) && teams.groups.length
-    ? teams.groups
-    : "ABCDEFGHIJKL".split("");
+  const groups = teams?.groups || [];
   const teamsByGroup = teams?.teamsByGroup || {};
   const providedById = new Map(
     providedGroup
