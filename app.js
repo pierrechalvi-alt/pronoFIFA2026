@@ -269,6 +269,11 @@ function renderApp(){
           Objectif : être le plus proche possible… et prétendre que c’était “évident”.
           (Pronostics : <b>vainqueur / nul</b> seulement.)
         </p>
+        <div class="row" style="margin-top:8px">
+          <span class="badge a2">1) Infos perso ✅</span>
+          <span class="badge ${u.finalSubmittedAt ? "a2" : ""}">2) Pronostics ${u.finalSubmittedAt ? "✅" : "en cours"}</span>
+          <span class="badge ${u.tieBreakerSubmittedAt ? "a1" : ""}">3) Subsidiaire ${u.tieBreakerSubmittedAt ? "✅" : "à faire"}</span>
+        </div>
 
         <div class="hr"></div>
 
