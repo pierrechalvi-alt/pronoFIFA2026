@@ -8,6 +8,8 @@ const state = {
   me: null,
   onboardingStep: "welcome", // welcome | profile | app
   view: "groups", // groups | qualifs | ko | recap
+  hubTab: "leaderboard", // leaderboard | myPicks | stats
+  selectedLeaderboardUserKey: null,
   teams: null,
   matches: null,
   filterText: "",
@@ -180,6 +182,11 @@ function logout(){
 function pick(matchId, val){
   const u = currentUser();
   if (u.finalSubmittedAt) return;
+  const match = getMatchById(matchId);
+  if (match?.stage === "KO" && val === "D") {
+    alert("À partir des seizièmes, le match nul n'est pas autorisé. Choisis le qualifié (1 ou 2).");
+    return;
+  }
   u.picks[String(matchId)] = val;
   saveAll();
   render();
@@ -333,11 +340,6 @@ function renderApp(){
           </div>
         ` : ""}
 
-        <div class="row" style="margin-top:12px">
-          <button class="btn" id="exportBtn">Exporter mes pronos (JSON)</button>
-          <button class="btn" id="importBtn">Importer un JSON</button>
-          <input type="file" id="importFile" accept="application/json" hidden />
-        </div>
       </section>
 
       <aside class="card">
@@ -350,9 +352,7 @@ function renderApp(){
           <span class="badge a2">Poules: ${groupDone}/${groupTotal}</span>
           <span class="badge a4">Phase finale: ${koDone}/${koTotal}</span>
         </div>
-        <small>
-          Astuce : l’export JSON te permet de m’envoyer tes pronos sur le groupe WhatsApp/Discord.
-        </small>
+        <small>Ton avancée est sauvegardée automatiquement dans ce navigateur.</small>
       </aside>
     </div>
 
@@ -381,9 +381,6 @@ function renderApp(){
   if (bonus) bonus.oninput = (e) => setBonusGoals(e.target.value);
   const tieBtn = document.getElementById("tieBtn");
   if (tieBtn) tieBtn.onclick = () => submitTieBreaker();
-  document.getElementById("exportBtn").onclick = () => exportJSON();
-  document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
-  document.getElementById("importFile").onchange = (e) => importJSON(e.target.files?.[0]);
   document.getElementById("filterText").oninput = (e) => {
     state.filterText = e.target.value;
     render();
@@ -405,6 +402,7 @@ function renderApp(){
 
   wireMatchButtons();
   wireQualifs();
+  wireHubControls();
 }
 
 function renderGroups(){
@@ -475,7 +473,7 @@ function renderKO(){
     { key:"FINAL", title:"Finale" }
   ];
 
-  let html = `<p>Pronostique toute la phase finale jusqu’au vainqueur : <b>32/32</b> matchs.</p>`;
+  let html = `<p>Pronostique toute la phase finale jusqu’au vainqueur : <b>32/32</b> matchs. À partir des seizièmes, le nul n'est plus disponible (il faut choisir le qualifié).</p>`;
 
   for (const r of rounds){
     const ms = filterMatches(ko.filter(m => m.round === r.key));
@@ -509,7 +507,6 @@ function renderRecap(){
       <p><b>✅ Envoi définitif effectué.</b> ${u.tieBreakerSubmittedAt ? "Merci, ton dossier est complet !" : "Il te reste la réponse subsidiaire à envoyer en haut de page."}</p>
     `}
     <div class="row" style="margin-top:10px">
-      <button class="btn primary" id="exportBtn2">Exporter mes pronos (JSON)</button>
       <button class="btn danger" id="resetBtn">Tout effacer (panique)</button>
     </div>
     ${u.tieBreakerSubmittedAt ? renderPlayerHub() : ""}
@@ -522,9 +519,8 @@ function matchRow(m){
   const u = currentUser();
   const v = u.picks[String(m.id)] || "";
   const locked = Boolean(u.finalSubmittedAt);
-
-  const homeLabel = m.stage === "KO" ? (m.homeLabel || "À définir") : (m.home || "À définir");
-  const awayLabel = m.stage === "KO" ? (m.awayLabel || "À définir") : (m.away || "À définir");
+  const { homeLabel, awayLabel } = getMatchDisplayTeams(u, m);
+  const isKO = m.stage === "KO";
 
   const meta = [
     `Match ${m.id}`,
@@ -552,7 +548,7 @@ function matchRow(m){
 
       <div class="picks">
         <button class="pick ${v==="H"?"active":""}" data-pick="H" title="Victoire équipe gauche" ${locked ? "disabled" : ""}>1</button>
-        <button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>N</button>
+        ${isKO ? "" : `<button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>N</button>`}
         <button class="pick ${v==="A"?"active":""}" data-pick="A" title="Victoire équipe droite" ${locked ? "disabled" : ""}>2</button>
       </div>
     </div>
@@ -567,8 +563,6 @@ function wireMatchButtons(){
     }
   }
 
-  const exp2 = document.getElementById("exportBtn2");
-  if (exp2) exp2.onclick = () => exportJSON();
   const finalBtn = document.getElementById("finalBtn");
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
 
@@ -594,52 +588,6 @@ function wireQualifs(){
   }
 }
 
-function exportJSON(){
-  const u = currentUser();
-  const payload = {
-    profile: u.profile,
-    picks: u.picks,
-    qualifiers: u.qualifiers,
-    bonusGoals: u.bonusGoals,
-    finalSubmittedAt: u.finalSubmittedAt,
-    tieBreakerSubmittedAt: u.tieBreakerSubmittedAt,
-    exportedAt: new Date().toISOString()
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `pronos_fwc26_${userKey(u.profile)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function importJSON(file){
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    if (!payload?.profile?.firstName || !payload?.profile?.lastName) {
-      alert("Le fichier JSON est invalide (profil manquant).");
-      return;
-    }
-    setUser(payload.profile);
-    const u = currentUser();
-    u.picks = payload.picks && typeof payload.picks === "object" ? payload.picks : {};
-    u.qualifiers = payload.qualifiers && typeof payload.qualifiers === "object" ? payload.qualifiers : {};
-    u.bonusGoals = Number.isFinite(Number(payload.bonusGoals)) ? Number(payload.bonusGoals) : null;
-    u.finalSubmittedAt = payload.finalSubmittedAt || null;
-    u.tieBreakerSubmittedAt = payload.tieBreakerSubmittedAt || null;
-    saveAll();
-    alert("Import réussi ✅");
-    render();
-  } catch {
-    alert("Impossible d'importer ce fichier (JSON invalide).");
-  }
-}
-
 function submitFinalPicks(){
   const u = currentUser();
   const total = countTotalMatches();
@@ -662,6 +610,8 @@ function submitTieBreaker(){
     return;
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
+  state.selectedLeaderboardUserKey = userKey(u.profile);
+  state.hubTab = "leaderboard";
   saveAll();
   alert("Merci ! Ton profil joueur est complet 🎉");
   state.view = "recap";
@@ -671,28 +621,214 @@ function submitTieBreaker(){
 function renderPlayerHub(){
   const rankings = computeLeaderboard();
   const liveRows = listLiveResults();
+  const stats = computeCommunityStats();
+  const selectedUser = getSelectedLeaderboardUser();
+  const selectedUserLabel = selectedUser?.profile
+    ? `${selectedUser.profile.firstName} ${selectedUser.profile.lastName}`
+    : "Joueur";
+  const myKey = userKey(currentUser().profile);
   return `
     <div class="hr"></div>
     <h2>Merci pour ta participation 🙌</h2>
-    <p>Ton profil est créé. Tu peux revoir ta grille, suivre les résultats en direct et le classement des inscrits.</p>
-    <div class="grid two" style="margin-top:10px">
+    <p>Ton profil est créé. À gauche : résultats + calendrier. À droite : classement interactif, ton tableau de pronos, et statistiques de la communauté.</p>
+    <div class="hub-layout" style="margin-top:10px">
       <section class="card" style="padding:12px">
-        <h2>Résultats en direct</h2>
+        <h2>Résultats & calendrier</h2>
         ${liveRows || `<p style="margin-top:0">Aucun score publié pour le moment. Les résultats s’afficheront automatiquement dès qu’ils seront ajoutés.</p>`}
-        <p style="margin-top:0">Les résultats apparaissent ici dès qu'ils sont renseignés dans le calendrier.</p>
-        <small>Astuce : ajoute <code>scoreHome</code> et <code>scoreAway</code> dans <code>data/matches.json</code> pour alimenter ce flux.</small>
+        ${renderCalendar()}
       </section>
       <section class="card" style="padding:12px">
-        <h2>Classement des joueurs</h2>
-        ${rankings.map((r, idx) => `
-          <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
-            <b>#${idx + 1} ${escapeHtml(r.label)}</b>
-            <span class="badge">${r.done}/${r.total} pronos</span>
-          </div>
-        `).join("")}
+        <div class="tabs" style="margin-top:0">
+          <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
+          <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Mes pronos</div>
+          <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
+        </div>
+        ${state.hubTab === "leaderboard" ? `
+          <h2>Classement des joueurs</h2>
+          ${rankings.map((r, idx) => `
+            <button class="player-row ${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
+              <span><b>#${idx + 1} ${escapeHtml(r.label)}</b></span>
+              <span class="badge">${r.done}/${r.total} pronos</span>
+            </button>
+          `).join("")}
+          ${selectedUser ? `
+            <div class="hr"></div>
+            <h2>Grille de ${escapeHtml(selectedUserLabel)}</h2>
+            ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
+          ` : ""}
+        ` : ""}
+        ${state.hubTab === "myPicks" ? `
+          <h2>Ma grille de pronostics</h2>
+          ${renderPicksTable(currentUser(), "Moi")}
+        ` : ""}
+        ${state.hubTab === "stats" ? `
+          <h2>Statistiques utiles</h2>
+          ${stats.length ? stats.map((item) => `
+            <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
+              <span>${escapeHtml(item.label)}</span>
+              <span class="badge">${item.rate}% (${item.count}/${item.total})</span>
+            </div>
+          `).join("") : `<p>Aucune statistique disponible pour le moment.</p>`}
+          <small>Exemples : % de joueurs voyant la France en quart, le Brésil en finale, etc.</small>
+        ` : ""}
+        ${state.hubTab === "leaderboard" && state.selectedLeaderboardUserKey === myKey ? `
+          <small>Astuce : clique sur un autre joueur pour comparer sa grille.</small>
+        ` : ""}
       </section>
     </div>
   `;
+}
+
+function renderCalendar(){
+  const list = [...state.matches.groupStage, ...state.matches.knockout]
+    .slice()
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .slice(0, 24);
+  return `
+    <div class="hr"></div>
+    <h2>Calendrier (prochains matchs)</h2>
+    ${list.map((m) => {
+      const info = getMatchDisplayTeams(currentUser(), m);
+      return `
+        <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
+          <span>M${m.id} • ${escapeHtml(info.homeLabel)} vs ${escapeHtml(info.awayLabel)}</span>
+          <span class="meta">${escapeHtml([m.date, m.time, m.city].filter(Boolean).join(" • ") || "Date à confirmer")}</span>
+        </div>
+      `;
+    }).join("")}
+  `;
+}
+
+function renderPicksTable(userData, label){
+  const allMatches = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
+  const rows = allMatches.map((m) => {
+    const { homeLabel, awayLabel } = getMatchDisplayTeams(userData, m);
+    const pickValue = userData.picks?.[String(m.id)] || "-";
+    const pickLabel = pickValue === "H" ? "1" : pickValue === "A" ? "2" : pickValue === "D" ? "N" : "-";
+    return `
+      <tr>
+        <td>${m.id}</td>
+        <td>${escapeHtml(roundLabel(m.round) || `Groupe ${m.group || "-"}`)}</td>
+        <td>${escapeHtml(homeLabel)}</td>
+        <td>${escapeHtml(awayLabel)}</td>
+        <td><b>${pickLabel}</b></td>
+      </tr>
+    `;
+  }).join("");
+  return `
+    <div class="table-wrap">
+      <table class="picks-table">
+        <thead>
+          <tr><th>#</th><th>Tour</th><th>Équipe 1</th><th>Équipe 2</th><th>Prono ${escapeHtml(label)}</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function getSelectedLeaderboardUser(){
+  const users = state.data.users || {};
+  if (!state.selectedLeaderboardUserKey || !users[state.selectedLeaderboardUserKey]) {
+    const firstKey = Object.keys(users)[0] || null;
+    state.selectedLeaderboardUserKey = firstKey;
+  }
+  return state.selectedLeaderboardUserKey ? users[state.selectedLeaderboardUserKey] : null;
+}
+
+function computeCommunityStats(){
+  const users = Object.values(state.data.users || {}).filter((u) => u?.picks && u.tieBreakerSubmittedAt);
+  const total = users.length;
+  if (!total) return [];
+
+  const targets = [
+    { matchId: 97, team: "France", label: "Voient la France en quart (QF 97)" },
+    { matchId: 104, team: "Brésil", label: "Voient le Brésil en finale (match 104)" },
+    { matchId: 104, team: "France", label: "Voient la France en finale (match 104)" }
+  ];
+  return targets.map((target) => {
+    const count = users.filter((u) => {
+      const match = getMatchById(target.matchId);
+      if (!match) return false;
+      const { homeLabel, awayLabel } = getMatchDisplayTeams(u, match);
+      return normalizeName(homeLabel) === normalizeName(target.team) || normalizeName(awayLabel) === normalizeName(target.team);
+    }).length;
+    return { label: target.label, count, total, rate: Math.round((count / total) * 100) };
+  });
+}
+
+function normalizeName(value){
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function getMatchById(id){
+  return [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])]
+    .find((m) => Number(m.id) === Number(id));
+}
+
+function getMatchDisplayTeams(userData, match){
+  if (!match) return { homeLabel: "À définir", awayLabel: "À définir" };
+  if (match.stage !== "KO") {
+    return { homeLabel: match.home || "À définir", awayLabel: match.away || "À définir" };
+  }
+  return {
+    homeLabel: resolveKnockoutSlot(match.homeLabel, userData),
+    awayLabel: resolveKnockoutSlot(match.awayLabel, userData)
+  };
+}
+
+function resolveKnockoutSlot(label, userData){
+  const fallback = label || "À définir";
+  const raw = String(label || "");
+  const winnerMatchRef = raw.match(/Vainqueur Match\s*(\d+)/i);
+  if (winnerMatchRef) {
+    return pickWinnerName(Number(winnerMatchRef[1]), userData) || fallback;
+  }
+  const loserSemiRef = raw.match(/Perdant Demi\s*(\d+)/i);
+  if (loserSemiRef) {
+    return pickLoserName(Number(loserSemiRef[1]), userData) || fallback;
+  }
+  return fallback;
+}
+
+function pickWinnerName(matchId, userData){
+  const match = getMatchById(matchId);
+  if (!match) return null;
+  const teams = getMatchDisplayTeams(userData, match);
+  const predicted = userData.picks?.[String(matchId)];
+  if (predicted === "H") return teams.homeLabel;
+  if (predicted === "A") return teams.awayLabel;
+  return null;
+}
+
+function pickLoserName(matchId, userData){
+  const match = getMatchById(matchId);
+  if (!match) return null;
+  const teams = getMatchDisplayTeams(userData, match);
+  const predicted = userData.picks?.[String(matchId)];
+  if (predicted === "H") return teams.awayLabel;
+  if (predicted === "A") return teams.homeLabel;
+  return null;
+}
+
+function wireHubControls(){
+  for (const el of document.querySelectorAll("[data-hubtab]")){
+    el.onclick = () => {
+      state.hubTab = el.dataset.hubtab;
+      render();
+    };
+  }
+  for (const row of document.querySelectorAll("[data-playerkey]")){
+    row.onclick = () => {
+      state.selectedLeaderboardUserKey = row.dataset.playerkey;
+      state.hubTab = "leaderboard";
+      render();
+    };
+  }
 }
 
 function listLiveResults(){
@@ -701,11 +837,10 @@ function listLiveResults(){
     .slice(0, 12);
   if (!all.length) return "";
   return all.map((m) => {
-    const home = m.stage === "KO" ? (m.homeLabel || "À définir") : (m.home || "À définir");
-    const away = m.stage === "KO" ? (m.awayLabel || "À définir") : (m.away || "À définir");
+    const info = getMatchDisplayTeams(currentUser(), m);
     return `
       <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
-        <span>${escapeHtml(home)} vs ${escapeHtml(away)}</span>
+        <span>${escapeHtml(info.homeLabel)} vs ${escapeHtml(info.awayLabel)}</span>
         <b>${m.scoreHome} - ${m.scoreAway}</b>
       </div>
     `;
@@ -713,11 +848,12 @@ function listLiveResults(){
 }
 
 function computeLeaderboard(){
-  const users = Object.values(state.data.users || {});
+  const users = Object.entries(state.data.users || {});
   const total = countTotalMatches();
   return users
-    .filter(u => u?.profile)
-    .map((u) => ({
+    .filter(([, u]) => u?.profile)
+    .map(([key, u]) => ({
+      key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
       done: Object.keys(u.picks || {}).length,
       total
