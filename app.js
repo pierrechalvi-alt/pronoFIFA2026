@@ -35,9 +35,53 @@ async function init(){
 }
 
 function normalizeMatches(m){
-  const groupStage = Array.isArray(m.groupStage) ? m.groupStage : [];
-  const knockout = Array.isArray(m.knockout) ? m.knockout : [];
+  const groupStage = Array.isArray(m.groupStage) ? [...m.groupStage] : [];
+  const knockout = Array.isArray(m.knockout) ? [...m.knockout] : [];
+  const existing = new Set([...groupStage, ...knockout].map(match => Number(match.id)));
+
+  for (let id = 1; id <= 104; id += 1){
+    if (existing.has(id)) continue;
+    if (id <= 72){
+      const groupIndex = Math.floor((id - 1) / 6);
+      const group = String.fromCharCode(65 + groupIndex); // A -> L
+      groupStage.push({
+        id,
+        stage: "GROUP",
+        group,
+        home: `Équipe ${id}A`,
+        away: `Équipe ${id}B`,
+        date: null,
+        time: null,
+        city: null,
+        stadium: null
+      });
+    } else {
+      knockout.push({
+        id,
+        stage: "KO",
+        round: inferRoundFromId(id),
+        homeLabel: `Équipe à définir (${id}A)`,
+        awayLabel: `Équipe à définir (${id}B)`,
+        date: null,
+        time: null,
+        city: null,
+        stadium: null
+      });
+    }
+  }
+
+  groupStage.sort((a, b) => a.id - b.id);
+  knockout.sort((a, b) => a.id - b.id);
   return { groupStage, knockout };
+}
+
+function inferRoundFromId(id){
+  if (id >= 73 && id <= 88) return "R32";
+  if (id >= 89 && id <= 96) return "R16";
+  if (id >= 97 && id <= 100) return "QF";
+  if (id >= 101 && id <= 102) return "SF";
+  if (id === 103) return "BRONZE";
+  return "FINAL";
 }
 
 function userKey(profile){
@@ -79,6 +123,7 @@ function setUser(profile){
 }
 function logout(){
   state.me = null;
+  state.onboardingStep = "welcome";
   state.data.lastUserKey = null;
   saveAll();
   render();
@@ -137,6 +182,23 @@ function renderWelcome(){
           <button class="btn primary" id="startBtn">Je fonce !</button>
         </div>
       </section>
+
+      <aside class="card">
+        <h2>Règles express</h2>
+        <p>
+          Tu pronostiques <b>uniquement le résultat</b> (1/N/2) pour tous les matchs, jusqu’au vainqueur final.
+          Ensuite seulement, question subsidiaire sur le total de buts.
+        </p>
+        <small>Pas de compte email : ton profil est enregistré localement.</small>
+      </aside>
+    </div>
+  `;
+  document.getElementById("startBtn").onclick = () => {
+    state.onboardingStep = "profile";
+    render();
+  };
+}
+
 
       <aside class="card">
         <h2>Règles express</h2>
@@ -312,7 +374,7 @@ function renderApp(){
 function renderGroups(){
   const groups = state.teams.groups;
   const gs = state.matches.groupStage;
-  let html = `<p>Pronostique les matchs de poule (1 / N / 2). Le site fonctionne même si tu complètes progressivement la liste.</p>`;
+  let html = `<p>Pronostique les matchs de poule (1 / N / 2). Objectif obligatoire : <b>72/72</b> en phase de groupes.</p>`;
 
   for (const g of groups){
     const matches = filterMatches(gs.filter(m => m.group === g));
@@ -325,7 +387,7 @@ function renderGroups(){
     for (const m of matches) html += matchRow(m);
   }
 
-  html += `<div class="hr"></div><small>Source calendrier : PDF FIFA officiel. (Les heures sont indiquées ET dans le PDF.)</small>`;
+  html += `<div class="hr"></div><small>Objectif global : valider <b>104/104</b> avant l’envoi définitif.</small>`;
   return html;
 }
 
@@ -377,7 +439,7 @@ function renderKO(){
     { key:"FINAL", title:"Finale" }
   ];
 
-  let html = `<p>Version B1 : libellés simples (ex : <b>Vainqueur Match 89</b>). Aucun code cryptique.</p>`;
+  let html = `<p>Pronostique toute la phase finale jusqu’au vainqueur : <b>32/32</b> matchs.</p>`;
 
   for (const r of rounds){
     const ms = filterMatches(ko.filter(m => m.round === r.key));
@@ -572,6 +634,7 @@ function submitTieBreaker(){
 
 function renderPlayerHub(){
   const rankings = computeLeaderboard();
+  const liveRows = listLiveResults();
   return `
     <div class="hr"></div>
     <h2>Merci pour ta participation 🙌</h2>
@@ -579,6 +642,7 @@ function renderPlayerHub(){
     <div class="grid two" style="margin-top:10px">
       <section class="card" style="padding:12px">
         <h2>Résultats en direct</h2>
+        ${liveRows || `<p style="margin-top:0">Aucun score publié pour le moment. Les résultats s’afficheront automatiquement dès qu’ils seront ajoutés.</p>`}
         <p style="margin-top:0">Les résultats apparaissent ici dès qu'ils sont renseignés dans le calendrier.</p>
         <small>Astuce : ajoute <code>scoreHome</code> et <code>scoreAway</code> dans <code>data/matches.json</code> pour alimenter ce flux.</small>
       </section>
@@ -593,6 +657,23 @@ function renderPlayerHub(){
       </section>
     </div>
   `;
+}
+
+function listLiveResults(){
+  const all = [...state.matches.groupStage, ...state.matches.knockout]
+    .filter(m => Number.isFinite(m.scoreHome) && Number.isFinite(m.scoreAway))
+    .slice(0, 12);
+  if (!all.length) return "";
+  return all.map((m) => {
+    const home = m.stage === "KO" ? (m.homeLabel || "À définir") : (m.home || "À définir");
+    const away = m.stage === "KO" ? (m.awayLabel || "À définir") : (m.away || "À définir");
+    return `
+      <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
+        <span>${escapeHtml(home)} vs ${escapeHtml(away)}</span>
+        <b>${m.scoreHome} - ${m.scoreAway}</b>
+      </div>
+    `;
+  }).join("");
 }
 
 function computeLeaderboard(){
