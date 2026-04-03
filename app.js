@@ -199,6 +199,23 @@ function renderWelcome(){
   };
 }
 
+
+      <aside class="card">
+        <h2>Règles express</h2>
+        <p>
+          Tu pronostiques <b>uniquement le résultat</b> (1/N/2) pour tous les matchs, jusqu’au vainqueur final.
+          Ensuite seulement, question subsidiaire sur le total de buts.
+        </p>
+        <small>Pas de compte email : ton profil est enregistré localement.</small>
+      </aside>
+    </div>
+  `;
+  document.getElementById("startBtn").onclick = () => {
+    state.onboardingStep = "profile";
+    render();
+  };
+}
+
 function renderProfileSetup(){
   APP.innerHTML = `
     <div class="grid two">
@@ -626,6 +643,8 @@ function renderPlayerHub(){
       <section class="card" style="padding:12px">
         <h2>Résultats en direct</h2>
         ${liveRows || `<p style="margin-top:0">Aucun score publié pour le moment. Les résultats s’afficheront automatiquement dès qu’ils seront ajoutés.</p>`}
+        <p style="margin-top:0">Les résultats apparaissent ici dès qu'ils sont renseignés dans le calendrier.</p>
+        <small>Astuce : ajoute <code>scoreHome</code> et <code>scoreAway</code> dans <code>data/matches.json</code> pour alimenter ce flux.</small>
       </section>
       <section class="card" style="padding:12px">
         <h2>Classement des joueurs</h2>
