@@ -76,6 +76,18 @@ input, select{
   outline:none;
 }
 input:focus{border-color: rgba(34,195,182,.65)}
+.toggle-wrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:20px;
+  color:var(--muted);
+  font-size:13px;
+}
+.toggle-wrap input{
+  width:auto;
+  accent-color: var(--a1);
+}
 
 .btn{
   padding:12px 14px;
@@ -104,6 +116,20 @@ input:focus{border-color: rgba(34,195,182,.65)}
 .badge.a2{border-color: rgba(255,138,42,.35)}
 .badge.a3{border-color: rgba(255,61,127,.35)}
 .badge.a4{border-color: rgba(124,92,255,.35)}
+.progress{
+  width:100%;
+  height:10px;
+  border-radius:999px;
+  background: rgba(255,255,255,0.08);
+  border:1px solid var(--line);
+  overflow:hidden;
+  margin:10px 0 4px;
+}
+.progress-bar{
+  height:100%;
+  background: linear-gradient(90deg, var(--a1), var(--a2));
+  transition: width .2s ease;
+}
 
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
 .tab{
@@ -139,6 +165,7 @@ input:focus{border-color: rgba(34,195,182,.65)}
   font-weight:900;
 }
 .pick.active{border-color: rgba(34,195,182,.55);background: rgba(34,195,182,.18)}
+.pick:disabled{opacity:.45;cursor:not-allowed}
 
 .hr{height:1px;background:var(--line);margin:14px 0}
 
