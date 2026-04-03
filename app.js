@@ -1,5 +1,6 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
+const ASSET_BASE_URL = new URL("./", import.meta.url);
 
 const LS_KEY = "fwc26_pronos_v1";
 
@@ -17,12 +18,23 @@ const state = {
 init();
 
 async function init(){
-  const [teams, matches] = await Promise.all([
-    fetch("./data/teams.json").then(r=>r.json()),
-    fetch("./data/matches.json").then(r=>r.json())
-  ]);
-  state.teams = teams;
-  state.matches = normalizeMatches(matches);
+  try {
+    const [teams, matches] = await Promise.all([
+      loadJSON("data/teams.json"),
+      loadJSON("data/matches.json")
+    ]);
+    state.teams = teams;
+    state.matches = normalizeMatches(matches, teams);
+  } catch (err) {
+    APP.innerHTML = `
+      <section class="card">
+        <h1>Impossible de charger l'application</h1>
+        <p>Vérifie que les fichiers <code>data/teams.json</code> et <code>data/matches.json</code> sont bien accessibles.</p>
+        <small>Détail technique : ${escapeHtml(err?.message || "erreur inconnue")}</small>
+      </section>
+    `;
+    return;
+  }
 
   if (state.data?.lastUserKey) {
     const u = state.data.users?.[state.data.lastUserKey];
@@ -34,28 +46,22 @@ async function init(){
   render();
 }
 
-function normalizeMatches(m){
-  const groupStage = Array.isArray(m.groupStage) ? [...m.groupStage] : [];
+async function loadJSON(path){
+  const url = new URL(path, ASSET_BASE_URL).toString();
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Échec chargement ${path} (HTTP ${res.status})`);
+  return res.json();
+}
+
+function normalizeMatches(m, teams){
+  const providedGroup = Array.isArray(m.groupStage) ? [...m.groupStage] : [];
+  const groupStage = buildGroupStageMatches(teams, providedGroup);
   const knockout = Array.isArray(m.knockout) ? [...m.knockout] : [];
   const existing = new Set([...groupStage, ...knockout].map(match => Number(match.id)));
 
   for (let id = 1; id <= 104; id += 1){
     if (existing.has(id)) continue;
-    if (id <= 72){
-      const groupIndex = Math.floor((id - 1) / 6);
-      const group = String.fromCharCode(65 + groupIndex); // A -> L
-      groupStage.push({
-        id,
-        stage: "GROUP",
-        group,
-        home: `Équipe ${id}A`,
-        away: `Équipe ${id}B`,
-        date: null,
-        time: null,
-        city: null,
-        stadium: null
-      });
-    } else {
+    if (id > 72) {
       knockout.push({
         id,
         stage: "KO",
@@ -73,6 +79,57 @@ function normalizeMatches(m){
   groupStage.sort((a, b) => a.id - b.id);
   knockout.sort((a, b) => a.id - b.id);
   return { groupStage, knockout };
+}
+
+function buildGroupStageMatches(teams, providedGroup){
+  const groups = Array.isArray(teams?.groups) && teams.groups.length
+    ? teams.groups
+    : "ABCDEFGHIJKL".split("");
+  const teamsByGroup = teams?.teamsByGroup || {};
+  const providedById = new Map(
+    providedGroup
+      .filter((m) => Number.isFinite(Number(m.id)) && Number(m.id) >= 1 && Number(m.id) <= 72)
+      .map((m) => [Number(m.id), m])
+  );
+  const pairings = [[0, 1], [2, 3], [0, 2], [3, 1], [0, 3], [1, 2]];
+  const groupStage = [];
+
+  for (let gIndex = 0; gIndex < groups.length; gIndex += 1){
+    const group = groups[gIndex];
+    const teamList = [...(teamsByGroup[group] || [])];
+    while (teamList.length < 4) teamList.push(`Équipe à définir (${group}${teamList.length + 1})`);
+
+    for (let i = 0; i < pairings.length; i += 1){
+      const id = gIndex * 6 + i + 1;
+      const [homeIdx, awayIdx] = pairings[i];
+      const provided = providedById.get(id);
+      const generatedHome = teamList[homeIdx];
+      const generatedAway = teamList[awayIdx];
+
+      groupStage.push({
+        id,
+        stage: "GROUP",
+        group,
+        home: isPlaceholderTeam(provided?.home) ? generatedHome : provided.home,
+        away: isPlaceholderTeam(provided?.away) ? generatedAway : provided.away,
+        date: provided?.date ?? null,
+        time: provided?.time ?? null,
+        city: provided?.city ?? null,
+        stadium: provided?.stadium ?? null,
+        scoreHome: provided?.scoreHome,
+        scoreAway: provided?.scoreAway
+      });
+    }
+  }
+  return groupStage;
+}
+
+function isPlaceholderTeam(name){
+  if (!name) return true;
+  const normalized = String(name).trim().toLowerCase();
+  return normalized === "à compléter"
+    || normalized.startsWith("équipe ")
+    || normalized.startsWith("equipe ");
 }
 
 function inferRoundFromId(id){
@@ -182,23 +239,6 @@ function renderWelcome(){
           <button class="btn primary" id="startBtn">Je fonce !</button>
         </div>
       </section>
-
-      <aside class="card">
-        <h2>Règles express</h2>
-        <p>
-          Tu pronostiques <b>uniquement le résultat</b> (1/N/2) pour tous les matchs, jusqu’au vainqueur final.
-          Ensuite seulement, question subsidiaire sur le total de buts.
-        </p>
-        <small>Pas de compte email : ton profil est enregistré localement.</small>
-      </aside>
-    </div>
-  `;
-  document.getElementById("startBtn").onclick = () => {
-    state.onboardingStep = "profile";
-    render();
-  };
-}
-
 
       <aside class="card">
         <h2>Règles express</h2>
