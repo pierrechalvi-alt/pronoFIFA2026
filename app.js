@@ -199,6 +199,23 @@ function renderWelcome(){
   };
 }
 
+
+      <aside class="card">
+        <h2>Règles express</h2>
+        <p>
+          Tu pronostiques <b>uniquement le résultat</b> (1/N/2) pour tous les matchs, jusqu’au vainqueur final.
+          Ensuite seulement, question subsidiaire sur le total de buts.
+        </p>
+        <small>Pas de compte email : ton profil est enregistré localement.</small>
+      </aside>
+    </div>
+  `;
+  document.getElementById("startBtn").onclick = () => {
+    state.onboardingStep = "profile";
+    render();
+  };
+}
+
 function renderProfileSetup(){
   APP.innerHTML = `
     <div class="grid two">
@@ -548,7 +565,15 @@ function wireQualifs(){
 
 function exportJSON(){
   const u = currentUser();
-  const payload = extractUserPayload(u);
+  const payload = {
+    profile: u.profile,
+    picks: u.picks,
+    qualifiers: u.qualifiers,
+    bonusGoals: u.bonusGoals,
+    finalSubmittedAt: u.finalSubmittedAt,
+    tieBreakerSubmittedAt: u.tieBreakerSubmittedAt,
+    exportedAt: new Date().toISOString()
+  };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -565,20 +590,15 @@ async function importJSON(file){
   try {
     const text = await file.text();
     const payload = JSON.parse(text);
-    const importedProfile = extractProfile(payload);
-    if (!importedProfile?.firstName || !importedProfile?.lastName) {
+    if (!payload?.profile?.firstName || !payload?.profile?.lastName) {
       alert("Le fichier JSON est invalide (profil manquant).");
       return;
     }
-    setUser(importedProfile);
+    setUser(payload.profile);
     const u = currentUser();
-    u.picks = payload.picks && typeof payload.picks === "object"
-      ? payload.picks
-      : (payload.pronos && typeof payload.pronos === "object" ? payload.pronos : {});
+    u.picks = payload.picks && typeof payload.picks === "object" ? payload.picks : {};
     u.qualifiers = payload.qualifiers && typeof payload.qualifiers === "object" ? payload.qualifiers : {};
-    u.bonusGoals = Number.isFinite(Number(payload.bonusGoals))
-      ? Number(payload.bonusGoals)
-      : (Number.isFinite(Number(payload.subsidiaire)) ? Number(payload.subsidiaire) : null);
+    u.bonusGoals = Number.isFinite(Number(payload.bonusGoals)) ? Number(payload.bonusGoals) : null;
     u.finalSubmittedAt = payload.finalSubmittedAt || null;
     u.tieBreakerSubmittedAt = payload.tieBreakerSubmittedAt || null;
     saveAll();
@@ -587,28 +607,6 @@ async function importJSON(file){
   } catch {
     alert("Impossible d'importer ce fichier (JSON invalide).");
   }
-}
-
-function extractUserPayload(user){
-  return {
-    profile: user.profile,
-    picks: user.picks,
-    qualifiers: user.qualifiers,
-    bonusGoals: user.bonusGoals,
-    finalSubmittedAt: user.finalSubmittedAt,
-    tieBreakerSubmittedAt: user.tieBreakerSubmittedAt,
-    exportedAt: new Date().toISOString()
-  };
-}
-
-function extractProfile(payload){
-  const profile = payload?.profile || payload?.user || null;
-  if (!profile) return null;
-  return {
-    firstName: profile.firstName || profile.prenom || "",
-    lastName: profile.lastName || profile.nom || "",
-    nickname: profile.nickname || profile.surnom || ""
-  };
 }
 
 function submitFinalPicks(){
@@ -650,6 +648,8 @@ function renderPlayerHub(){
       <section class="card" style="padding:12px">
         <h2>Résultats en direct</h2>
         ${liveRows || `<p style="margin-top:0">Aucun score publié pour le moment. Les résultats s’afficheront automatiquement dès qu’ils seront ajoutés.</p>`}
+        <p style="margin-top:0">Les résultats apparaissent ici dès qu'ils sont renseignés dans le calendrier.</p>
+        <small>Astuce : ajoute <code>scoreHome</code> et <code>scoreAway</code> dans <code>data/matches.json</code> pour alimenter ce flux.</small>
       </section>
       <section class="card" style="padding:12px">
         <h2>Classement des joueurs</h2>
