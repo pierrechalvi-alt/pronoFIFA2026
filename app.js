@@ -548,15 +548,7 @@ function wireQualifs(){
 
 function exportJSON(){
   const u = currentUser();
-  const payload = {
-    profile: u.profile,
-    picks: u.picks,
-    qualifiers: u.qualifiers,
-    bonusGoals: u.bonusGoals,
-    finalSubmittedAt: u.finalSubmittedAt,
-    tieBreakerSubmittedAt: u.tieBreakerSubmittedAt,
-    exportedAt: new Date().toISOString()
-  };
+  const payload = extractUserPayload(u);
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -573,15 +565,20 @@ async function importJSON(file){
   try {
     const text = await file.text();
     const payload = JSON.parse(text);
-    if (!payload?.profile?.firstName || !payload?.profile?.lastName) {
+    const importedProfile = extractProfile(payload);
+    if (!importedProfile?.firstName || !importedProfile?.lastName) {
       alert("Le fichier JSON est invalide (profil manquant).");
       return;
     }
-    setUser(payload.profile);
+    setUser(importedProfile);
     const u = currentUser();
-    u.picks = payload.picks && typeof payload.picks === "object" ? payload.picks : {};
+    u.picks = payload.picks && typeof payload.picks === "object"
+      ? payload.picks
+      : (payload.pronos && typeof payload.pronos === "object" ? payload.pronos : {});
     u.qualifiers = payload.qualifiers && typeof payload.qualifiers === "object" ? payload.qualifiers : {};
-    u.bonusGoals = Number.isFinite(Number(payload.bonusGoals)) ? Number(payload.bonusGoals) : null;
+    u.bonusGoals = Number.isFinite(Number(payload.bonusGoals))
+      ? Number(payload.bonusGoals)
+      : (Number.isFinite(Number(payload.subsidiaire)) ? Number(payload.subsidiaire) : null);
     u.finalSubmittedAt = payload.finalSubmittedAt || null;
     u.tieBreakerSubmittedAt = payload.tieBreakerSubmittedAt || null;
     saveAll();
@@ -590,6 +587,28 @@ async function importJSON(file){
   } catch {
     alert("Impossible d'importer ce fichier (JSON invalide).");
   }
+}
+
+function extractUserPayload(user){
+  return {
+    profile: user.profile,
+    picks: user.picks,
+    qualifiers: user.qualifiers,
+    bonusGoals: user.bonusGoals,
+    finalSubmittedAt: user.finalSubmittedAt,
+    tieBreakerSubmittedAt: user.tieBreakerSubmittedAt,
+    exportedAt: new Date().toISOString()
+  };
+}
+
+function extractProfile(payload){
+  const profile = payload?.profile || payload?.user || null;
+  if (!profile) return null;
+  return {
+    firstName: profile.firstName || profile.prenom || "",
+    lastName: profile.lastName || profile.nom || "",
+    nickname: profile.nickname || profile.surnom || ""
+  };
 }
 
 function submitFinalPicks(){
