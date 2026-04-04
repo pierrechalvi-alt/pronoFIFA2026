@@ -6,8 +6,8 @@ const LS_KEY = "fwc26_pronos_v1";
 
 const state = {
   me: null,
-  onboardingStep: "welcome", // welcome | profile | app
-  view: "overview", // overview | groups | ko | leaderboard | stats
+  onboardingStep: "welcome", // welcome | app
+  view: "overview",
   hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
@@ -227,148 +227,143 @@ function render(){
   }
 
   if (!state.me && state.onboardingStep === "welcome") return renderWelcome();
-  if (!state.me && state.onboardingStep === "profile") return renderProfileSetup();
   return renderApp();
 }
 
 function renderWelcome(){
   APP.innerHTML = `
-    <div class="grid two">
-      <section class="card">
-        <h1>Bienvenue dans l’arène des pronos ⚽</h1>
-        <p>On n’est pas là pour se prendre la tête : on pronostique tout le mondial avant le premier match… oui, même les <b>104</b>.</p>
-        <p><b>Petit mantra :</b> “Confiance absolue, mauvaise foi autorisée.” 😄</p>
-        <div class="row" style="margin-top:12px">
-          <button class="btn primary" id="startBtn">Je fonce !</button>
+    <section class="card auth-card">
+      <h1>Première connexion</h1>
+      <p>Entre ton nom, prénom et un mot de passe pour ta prochaine connexion.</p>
+      <div class="row">
+        <div class="field">
+          <label>Prénom</label>
+          <input id="firstName" placeholder="Ex: Karim" autocomplete="given-name" />
         </div>
-      </section>
-
-      <aside class="card">
-        <h2>Règles express</h2>
-        <p>
-          Tu pronostiques <b>uniquement le résultat</b> (1/N/2) pour tous les matchs, jusqu’au vainqueur final.
-          Ensuite seulement, question subsidiaire sur le total de buts.
-        </p>
-        <small>Pas de compte email : ton profil est enregistré localement.</small>
-      </aside>
-    </div>
+        <div class="field">
+          <label>Nom</label>
+          <input id="lastName" placeholder="Ex: Benzema" autocomplete="family-name" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Mot de passe</label>
+          <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>Équipe favorite (optionnel)</label>
+          <select id="favoriteTeam">
+            <option value="">— Choisir —</option>
+            ${Object.values(state.teams?.teamsByGroup || {}).flat().map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="authBtn">Entrer dans le tournoi</button>
+      </div>
+      <small>Si ton profil existe déjà, saisis le même nom/prénom + mot de passe pour te reconnecter.</small>
+    </section>
   `;
-  document.getElementById("startBtn").onclick = () => {
-    state.onboardingStep = "profile";
-    render();
-  };
-}
-
-function renderProfileSetup(){
-  APP.innerHTML = `
-    <div class="grid two">
-      <section class="card">
-        <h1>Ton profil</h1>
-        <p>Renseigne simplement ton prénom et ton nom pour démarrer.</p>
-        <div class="row">
-          <div class="field" style="flex:1; min-width:220px">
-            <label>Prénom</label>
-            <input id="firstName" placeholder="Ex: Karim" autocomplete="given-name" />
-          </div>
-          <div class="field" style="flex:1; min-width:220px">
-            <label>Nom</label>
-            <input id="lastName" placeholder="Ex: Benzema" autocomplete="family-name" />
-          </div>
-        </div>
-        <div class="row" style="margin-top:12px">
-          <button class="btn primary" id="nextBtn">Suivant</button>
-        </div>
-      </section>
-    </div>
-  `;
-  document.getElementById("nextBtn").onclick = () => {
+  document.getElementById("authBtn").onclick = () => {
     const firstName = document.getElementById("firstName").value.trim();
     const lastName  = document.getElementById("lastName").value.trim();
-    if (!firstName || !lastName) return alert("Merci de compléter prénom et nom.");
-    setUser({ firstName, lastName, nickname: "" });
+    const password = document.getElementById("password").value;
+    const favoriteTeam = document.getElementById("favoriteTeam").value || "";
+    if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
+    const profile = { firstName, lastName, nickname: "", favoriteTeam };
+    const key = userKey(profile);
+    const existing = state.data.users?.[key];
+    if (existing) {
+      if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
+      state.me = existing.profile;
+      state.onboardingStep = "app";
+      state.data.lastUserKey = key;
+      saveAll();
+      render();
+      return;
+    }
+    setUser(profile);
+    state.data.users[key].password = password;
+    saveAll();
+    render();
   };
 }
 
 function renderApp(){
   const u = currentUser();
-  const total = countTotalMatches();
-  const done = countPicks(u);
-  const percent = total ? Math.round((done / total) * 100) : 0;
-  const autoQualifiers = computeAutoQualifiers(u);
   const isContestMode = Boolean(u.tieBreakerSubmittedAt);
-
-  APP.innerHTML = `
-    <section class="card">
-      <h1>${isContestMode ? "Mode concours" : "Mes Pronos"}</h1>
-      <div class="row" style="justify-content:space-between">
-        <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>
-        <span class="badge a4">Qualifiés auto : ${autoQualifiers.qualifiedCount}/24</span>
-      </div>
-      <div class="progress">
-        <div class="progress-bar" style="width:${percent}%"></div>
-      </div>
-      <div class="row" style="justify-content:space-between">
-        <small><b>${done}/${total}</b> matchs pronostiqués</small>
-        <small>${Math.max(0, total - done)} restant(s)</small>
-      </div>
-      <small>${isContestMode
-        ? "Ta grille et ta question subsidiaire sont validées : les pronostics sont verrouillés."
-        : "Les équipes qualifiées sont reportées automatiquement dans le tableau final selon tes pronostics."}</small>
-    </section>
-
-    <div class="card" style="margin-top:12px">
-      ${isContestMode ? `
-        ${renderPostSubmissionHub()}
-      ` : `
-      <div class="row" style="margin-bottom:10px">
-        <label class="toggle-wrap">
-          <input id="unpickedOnly" type="checkbox" ${state.showUnpickedOnly ? "checked" : ""}/>
-          Afficher uniquement les matchs non pronostiqués
-        </label>
-      </div>
-      <div class="tabs">
-        <div class="tab ${state.view==="overview"?"active":""}" data-view="overview">Vue d’ensemble</div>
-        <div class="tab ${state.view==="groups"?"active":""}" data-view="groups">Poules</div>
-        <div class="tab ${state.view==="ko"?"active":""}" data-view="ko">Tableau final</div>
-        <div class="tab ${state.view==="leaderboard"?"active":""}" data-view="leaderboard">Classement</div>
-        <div class="tab ${state.view==="stats"?"active":""}" data-view="stats">Statistiques</div>
-      </div>
-      `}
-      <div id="panel"></div>
-    </div>
-  `;
-  if (!isContestMode) {
-    document.getElementById("unpickedOnly").onchange = (e) => {
-      state.showUnpickedOnly = Boolean(e.target.checked);
-      render();
-    };
-  }
-
-  const panel = document.getElementById("panel");
-  if (isContestMode) {
-    panel.innerHTML = "";
-  } else {
-    if (state.view === "overview") panel.innerHTML = renderOverview();
-    if (state.view === "groups") panel.innerHTML = renderGroups();
-    if (state.view === "ko") panel.innerHTML = renderKO();
-    if (state.view === "leaderboard") panel.innerHTML = renderLeaderboardView();
-    if (state.view === "stats") panel.innerHTML = renderStatsView();
-  }
-
-  if (!isContestMode) wireMatchButtons();
+  APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
+  wireMatchButtons();
   wireHubControls();
 }
 
-function renderPostSubmissionHub(){
+function renderPredictionJourney(){
+  const u = currentUser();
+  const total = countTotalMatches();
+  const done = countPicks(u);
+  const groupTotal = state.matches.groupStage.length;
+  const groupDone = countPicksByStage(u, "GROUP");
+  const koTotal = state.matches.knockout.length;
+  const koDone = countPicksByStage(u, "KO");
+
   return `
-    <div class="tabs">
-      <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
-      <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
-      <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Mes pronos</div>
-    </div>
-    ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
-    ${state.hubTab === "stats" ? renderStatsView() : ""}
-    ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
+    <section class="card">
+      <h1>Fais tes pronostics Coupe du Monde 2026</h1>
+      <p><b>Barème rapide :</b> Poules bon résultat = 1 pt, 32e = 2 pts, 16e = 4 pts, 8e = 8 pts, 1/4 = 16 pts, 1/2 = 32 pts, Finale vainqueur = 64 pts.</p>
+      <div class="progress"><div class="progress-bar" style="width:${Math.round((done / total) * 100)}%"></div></div>
+      <small>${done}/${total} matchs complétés.</small>
+    </section>
+    <section class="card" style="margin-top:12px">
+      <h2>1) Phase de groupes</h2>
+      <p>Pronostique d'abord chaque match de poule, puis continue vers les phases finales.</p>
+      ${renderOverview()}
+      <div class="hr"></div>
+      ${renderGroups()}
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="submitGroupsBtn" ${groupDone === groupTotal && !u.groupSubmittedAt ? "" : "disabled"}>Continuer vers les phases finales</button>
+      </div>
+    </section>
+    <section class="card" style="margin-top:12px">
+      <h2>2) Phases finales</h2>
+      ${u.groupSubmittedAt ? renderKO() : `<p><small>Valide d'abord les matchs de poules (${groupDone}/${groupTotal}).</small></p>`}
+      <div class="row" style="margin-top:12px">
+        <button class="btn danger" id="submitKOBtn" ${u.groupSubmittedAt && koDone === koTotal && !u.koSubmittedAt ? "" : "disabled"}>Je valide définitivement</button>
+      </div>
+      <small>Après ce clic, aucun retour arrière possible.</small>
+    </section>
+    <section class="card" style="margin-top:12px">
+      <h2>3) Question subsidiaire</h2>
+      ${u.koSubmittedAt ? `
+        <p>Combien de buts seront marqués sur toute la compétition ?</p>
+        <div class="row">
+          <div class="field" style="max-width:220px">
+            <input id="bonusGoals" type="number" min="0" value="${Number.isFinite(u.bonusGoals) ? u.bonusGoals : ""}" />
+          </div>
+          <button class="btn primary" id="submitBonusBtn" ${u.tieBreakerSubmittedAt ? "disabled" : ""}>Valider la question subsidiaire</button>
+        </div>
+      ` : `<p><small>Disponible après “Je valide définitivement”.</small></p>`}
+    </section>
+  `;
+}
+
+function renderTournamentHub(){
+  return `
+    <section class="card">
+      <h1>Tournoi en direct — FIFA World Cup 2026</h1>
+      <p>Retrouve ici les matchs passés / à venir, le classement des joueurs et les tendances statistiques.</p>
+    </section>
+    <section class="card" style="margin-top:12px">
+      <div class="tabs">
+        <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
+        <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
+        <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
+      </div>
+      ${renderTournamentMatchesCenter()}
+      <div class="hr"></div>
+      ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
+      ${state.hubTab === "stats" ? renderStatsView() : ""}
+      ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
+    </section>
   `;
 }
 
@@ -523,13 +518,14 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Pronos</th><th>Complétion</th></tr>
+          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th><th>Pronos</th><th>Complétion</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
             <tr class="${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
               <td>#${idx + 1}</td>
               <td>${escapeHtml(r.label)}</td>
+              <td>${escapeHtml(r.favoriteTeam || "—")}</td>
               <td>${r.done}/${r.total}</td>
               <td>${Math.round((r.done / r.total) * 100)}%</td>
             </tr>
@@ -546,14 +542,60 @@ function renderLeaderboardView(){
 }
 
 function renderStatsView(){
-  const stats = computeCommunityStats();
-  if (!stats.length) return `<p>Aucune statistique disponible pour le moment.</p>`;
-  return stats.map((item) => `
-    <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0">
-      <span>${escapeHtml(item.label)}</span>
-      <span class="badge a2">${item.rate}% (${item.count}/${item.total})</span>
+  const todayStats = computeTodayMatchStats();
+  const roundStats = computeRoundWinnerStats();
+  if (!todayStats.length && !roundStats.length) return `<p>Aucune statistique disponible pour le moment.</p>`;
+  return `
+    <h2>Matchs du jour</h2>
+    ${todayStats.length ? todayStats.map((item) => `
+      <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0">
+        <span>${escapeHtml(item.match)}</span>
+        <span class="badge a2">${escapeHtml(item.breakdown)}</span>
+      </div>
+    `).join("") : `<small>Aucun match daté aujourd'hui.</small>`}
+    <div class="hr"></div>
+    <h2>Tendances par phase finale</h2>
+    ${roundStats.map((item) => `
+      <div style="margin-bottom:10px">
+        <b>${escapeHtml(item.round)}</b>
+        ${item.teams.map((team) => `
+          <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
+            <span>${getTeamFlag(team.name)} ${escapeHtml(team.name)}</span>
+            <span class="badge">${team.rate}%</span>
+          </div>
+        `).join("")}
+      </div>
+    `).join("")}
+  `;
+}
+
+function renderTournamentMatchesCenter(){
+  const all = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
+  const past = all.filter((m) => Number.isFinite(m.scoreHome) && Number.isFinite(m.scoreAway)).slice(-8).reverse();
+  const upcoming = all.filter((m) => !Number.isFinite(m.scoreHome) || !Number.isFinite(m.scoreAway)).slice(0, 8);
+  const renderList = (list, withScore) => list.length ? list.map((m) => {
+    const info = getMatchDisplayTeams(currentUser(), m);
+    return `
+      <div class="match-card">
+        <span>${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
+        <b>${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
+        <span>${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
+      </div>
+    `;
+  }).join("") : `<small>Aucun match pour le moment.</small>`;
+
+  return `
+    <div class="grid two" style="margin-top:10px">
+      <div>
+        <h2>Matchs passés</h2>
+        ${renderList(past, true)}
+      </div>
+      <div>
+        <h2>Matchs à venir</h2>
+        ${renderList(upcoming, false)}
+      </div>
     </div>
-  `).join("");
+  `;
 }
 
 /* ---------- UI helpers ---------- */
@@ -616,6 +658,8 @@ function wireMatchButtons(){
   if (submitKOBtn) submitKOBtn.onclick = () => submitKOStage();
   const submitBonusBtn = document.getElementById("submitBonusBtn");
   if (submitBonusBtn) submitBonusBtn.onclick = () => submitTieBreaker();
+  const bonusInput = document.getElementById("bonusGoals");
+  if (bonusInput) bonusInput.oninput = (e) => setBonusGoals(e.target.value);
 }
 
 function wireQualifs(){
@@ -1088,10 +1132,74 @@ function computeLeaderboard(){
     .map(([key, u]) => ({
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
+      favoriteTeam: u.profile.favoriteTeam || inferPredictedWinner(u),
       done: Object.keys(u.picks || {}).length,
       total
     }))
     .sort((a, b) => b.done - a.done);
+}
+
+function inferPredictedWinner(userData){
+  const final = getMatchById(104);
+  if (!final) return "";
+  const teams = getMatchDisplayTeams(userData, final);
+  const pick = userData.picks?.["104"];
+  if (pick === "H") return teams.homeLabel;
+  if (pick === "A") return teams.awayLabel;
+  return "";
+}
+
+function computeTodayMatchStats(){
+  const today = new Date().toISOString().slice(0, 10);
+  const users = Object.values(state.data.users || {});
+  const all = [...state.matches.groupStage, ...state.matches.knockout];
+  const todayMatches = all.filter((m) => (m.date || "").slice(0, 10) === today);
+  return todayMatches.map((m) => {
+    const counts = new Map();
+    let total = 0;
+    for (const u of users){
+      const p = u.picks?.[String(m.id)];
+      if (!p) continue;
+      const teams = getMatchDisplayTeams(u, m);
+      const winner = p === "H" ? teams.homeLabel : p === "A" ? teams.awayLabel : "Nul";
+      counts.set(winner, (counts.get(winner) || 0) + 1);
+      total += 1;
+    }
+    const breakdown = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([team, count]) => `${Math.round((count / Math.max(1, total)) * 100)}% ${team}`)
+      .join(" • ");
+    const info = getMatchDisplayTeams(currentUser(), m);
+    return { match: `${info.homeLabel} vs ${info.awayLabel}`, breakdown: breakdown || "Aucun prono" };
+  });
+}
+
+function computeRoundWinnerStats(){
+  const users = Object.values(state.data.users || {});
+  const rounds = ["R32", "R16", "QF", "SF", "FINAL"];
+  return rounds.map((round) => {
+    const matches = state.matches.knockout.filter((m) => m.round === round);
+    const counts = new Map();
+    let total = 0;
+    for (const match of matches){
+      for (const u of users){
+        const p = u.picks?.[String(match.id)];
+        if (!p) continue;
+        const teams = getMatchDisplayTeams(u, match);
+        const winner = p === "H" ? teams.homeLabel : p === "A" ? teams.awayLabel : null;
+        if (!winner) continue;
+        counts.set(winner, (counts.get(winner) || 0) + 1);
+        total += 1;
+      }
+    }
+    return {
+      round: roundLabel(round),
+      teams: [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, rate: Math.round((count / Math.max(1, total)) * 100) }))
+    };
+  }).filter((entry) => entry.teams.length);
 }
 
 function roundLabel(r){
