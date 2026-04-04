@@ -7,6 +7,9 @@ const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
 const memoryStorage = { value: null };
 let matchLifecycleInterval = null;
+const CLIENT_ID = `client_${Math.random().toString(36).slice(2, 9)}`;
+const SYNC_CHANNEL_NAME = "fwc26_sync";
+let syncChannel = null;
 
 const state = {
   me: null,
@@ -57,6 +60,7 @@ async function init(){
 
   await hydrateDataStore();
   requestPersistentStorage();
+  setupRealtimeSync();
   startMatchLifecycleMonitor();
 
   if (state.data?.lastUserKey) {
@@ -222,19 +226,134 @@ function normalizeDataShape(raw){
 async function hydrateDataStore(){
   const localData = normalizeDataShape(state.data);
   const indexedData = await loadAllFromIndexedDB();
-  if (!indexedData) {
-    state.data = localData;
-    return;
-  }
-  const pickIndexed = Number(indexedData.updatedAt || 0) > Number(localData.updatedAt || 0);
-  state.data = pickIndexed ? indexedData : localData;
-  if (pickIndexed) saveAll();
+  state.data = mergeSnapshots(localData, indexedData || {});
+  persistSnapshot(false);
 }
 
 function saveAll(){
   state.data.updatedAt = Date.now();
+  persistSnapshot(true);
+}
+
+function persistSnapshot(announce){
   writeStorageItem(LS_KEY, JSON.stringify(state.data));
   saveAllToIndexedDB(state.data);
+  if (announce) broadcastSnapshot();
+}
+
+function readStorageItem(key){
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStorage.value;
+  }
+}
+
+function writeStorageItem(key, value){
+  memoryStorage.value = value;
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
+function setupRealtimeSync(){
+  window.addEventListener("storage", (event) => {
+    if (event.key !== LS_KEY || !event.newValue) return;
+    try {
+      integrateIncomingData(JSON.parse(event.newValue), "storage");
+    } catch {}
+  });
+  if ("BroadcastChannel" in window) {
+    syncChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+    syncChannel.onmessage = (event) => {
+      const payload = event.data;
+      if (!payload || payload.clientId === CLIENT_ID) return;
+      integrateIncomingData(payload.snapshot, "broadcast");
+    };
+  }
+  setInterval(async () => {
+    const indexed = await loadAllFromIndexedDB();
+    if (indexed) integrateIncomingData(indexed, "indexeddb");
+  }, 12000);
+}
+
+function broadcastSnapshot(){
+  if (!syncChannel) return;
+  syncChannel.postMessage({
+    clientId: CLIENT_ID,
+    updatedAt: Date.now(),
+    snapshot: state.data
+  });
+}
+
+function integrateIncomingData(incomingRaw, source){
+  const incoming = normalizeDataShape(incomingRaw);
+  const merged = mergeSnapshots(state.data, incoming);
+  if (JSON.stringify(merged) === JSON.stringify(state.data)) return;
+  state.data = merged;
+  persistSnapshot(false);
+  if (state.me) render();
+}
+
+function mergeSnapshots(baseRaw, incomingRaw){
+  const base = normalizeDataShape(baseRaw);
+  const incoming = normalizeDataShape(incomingRaw);
+  const mergedUsers = { ...base.users };
+
+  for (const [key, incomingUser] of Object.entries(incoming.users || {})){
+    const existingUser = mergedUsers[key];
+    if (!existingUser) {
+      mergedUsers[key] = incomingUser;
+      continue;
+    }
+    mergedUsers[key] = {
+      ...existingUser,
+      ...incomingUser,
+      profile: incomingUser.profile || existingUser.profile,
+      picks: { ...(existingUser.picks || {}), ...(incomingUser.picks || {}) },
+      qualifiers: { ...(existingUser.qualifiers || {}), ...(incomingUser.qualifiers || {}) }
+    };
+  }
+
+  const commentMap = new Map();
+  for (const comment of [...(base.thirdHalf?.comments || []), ...(incoming.thirdHalf?.comments || [])]){
+    const existing = commentMap.get(comment.id);
+    if (!existing) {
+      commentMap.set(comment.id, { ...comment, replies: Array.isArray(comment.replies) ? comment.replies : [] });
+      continue;
+    }
+    const repliesMap = new Map();
+    for (const reply of [...(existing.replies || []), ...((comment.replies || []))]){
+      repliesMap.set(reply.id, reply);
+    }
+    commentMap.set(comment.id, {
+      ...existing,
+      ...comment,
+      likes: { ...(existing.likes || {}), ...(comment.likes || {}) },
+      replies: [...repliesMap.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    });
+  }
+
+  const notifMap = new Map();
+  for (const notification of [...(base.notifications?.feed || []), ...(incoming.notifications?.feed || [])]){
+    notifMap.set(notification.id, notification);
+  }
+
+  return normalizeDataShape({
+    ...base,
+    ...incoming,
+    users: mergedUsers,
+    thirdHalf: {
+      comments: [...commentMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    },
+    notifications: {
+      feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
+      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
+    },
+    lastUserKey: incoming.lastUserKey || base.lastUserKey,
+    updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+  });
 }
 
 function readStorageItem(key){
