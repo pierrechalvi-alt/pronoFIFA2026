@@ -346,7 +346,7 @@ function render(){
   USERBOX.innerHTML = state.me
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
-         <span class="badge">👤 ${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
+         <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
@@ -601,7 +601,7 @@ function renderGroups(){
   const gs = state.matches.groupStage;
   const selectedGroup = groups.includes(state.selectedGroup) ? state.selectedGroup : groups[0];
   const matches = filterMatches(gs.filter((m) => m.group === selectedGroup));
-  let html = `<p>Pronostique les matchs de poule (1 / N / 2). Objectif obligatoire : <b>72/72</b> en phase de groupes.</p>`;
+  let html = "";
 
   html += `<div class="tabs compact-tabs">${groups.map((g) => `<div class="tab ${selectedGroup===g?"active":""}" data-group="${g}">Groupe ${g}</div>`).join("")}</div>`;
   html += `<h2>Groupe ${selectedGroup}</h2>`;
@@ -688,16 +688,13 @@ function renderBracketFunnel(userData, allowEditing){
               const disablePicks = !allowEditing || globalLocked;
               return `
                 <article class="funnel-match" data-matchid="${m.id}">
-                  <div class="row" style="justify-content:space-between">
-                    <b>${escapeHtml(roundLabel(m.round) || round)} • Match ${m.id}</b>
-                    <span class="meta">${escapeHtml([m.date, m.time, m.city].filter(Boolean).join(" • ") || "Date à confirmer")}</span>
+                  <div class="meta" style="text-align:center"><b>${escapeHtml(roundLabel(m.round) || round)} • Match ${m.id}</b> • ${escapeHtml([m.date, m.time, m.city].filter(Boolean).join(" • ") || "Date à confirmer")}</div>
+                  <div class="match-duel">
+                    <span class="team-chip">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
+                    <span class="vs-chip">VS</span>
+                    <span class="team-chip">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
                   </div>
-                  <div class="row" style="justify-content:space-between">
-                    <span>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
-                    <span class="meta">vs</span>
-                    <span>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
-                  </div>
-                  <div class="picks picks-visual picks-labels">
+                  <div class="picks picks-labels">
                     <button class="pick pick-label ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</button>
                     <button class="pick pick-label ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</button>
                   </div>
@@ -761,8 +758,7 @@ function renderLeaderboardView(){
     </div>
     ${selectedUser ? `
       <div class="hr"></div>
-      <h2>Vue d’ensemble de ${escapeHtml(selectedUser.profile.firstName)} ${escapeHtml(selectedUser.profile.lastName)}</h2>
-      ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
+      ${renderPicksTable(selectedUser, `${selectedUser.profile.firstName} ${selectedUser.profile.lastName}`, { title: `Les pronos de ${selectedUser.profile.firstName} ${selectedUser.profile.lastName}` })}
     ` : ""}
   `;
 }
@@ -843,11 +839,15 @@ function renderTournamentMatchesCenter(){
   const upcoming = all.filter((m) => !Number.isFinite(m.scoreHome) || !Number.isFinite(m.scoreAway)).slice(0, 8);
   const renderList = (list, withScore) => list.length ? list.map((m) => {
     const info = getMatchDisplayTeams(currentUser(), m);
+    const schedule = [m.date, m.time].filter(Boolean).join(" • ");
     return `
-      <div class="match-card">
-        <span>${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
-        <b>${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
-        <span>${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
+      <div>
+        <div class="match-card">
+          <span class="team-col">${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
+          <b class="vs-col">${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
+          <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
+        </div>
+        ${!withScore ? `<div class="meta">${escapeHtml(schedule || "Date/heure à confirmer")}</div>` : ""}
       </div>
     `;
   }).join("") : `<small>Aucun match pour le moment.</small>`;
@@ -1139,13 +1139,11 @@ function renderPlayerHub(){
           `).join("")}
           ${selectedUser ? `
             <div class="hr"></div>
-            <h2>Grille de ${escapeHtml(selectedUserLabel)}</h2>
-            ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
+            ${renderPicksTable(selectedUser, selectedUserLabel, { title: `Les pronos de ${selectedUserLabel}` })}
           ` : ""}
         ` : ""}
         ${state.hubTab === "myPicks" ? `
-          <h2>Ma grille de pronostics</h2>
-          ${renderPicksTable(currentUser(), "Moi")}
+          ${renderPicksTable(currentUser(), "moi", { title: "Mes pronos" })}
         ` : ""}
         ${state.hubTab === "stats" ? `
           <h2>Statistiques utiles</h2>
@@ -1185,31 +1183,46 @@ function renderCalendar(){
   `;
 }
 
-function renderPicksTable(userData, label){
-  const allMatches = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
-  const rows = allMatches.map((m) => {
-    const { homeLabel, awayLabel } = getMatchDisplayTeams(userData, m);
-    const pickValue = userData.picks?.[String(m.id)] || "-";
-    const pickLabel = pickValue === "H" ? "1" : pickValue === "A" ? "2" : pickValue === "D" ? "N" : "-";
-    return `
-      <tr>
-        <td>${m.id}</td>
-        <td>${escapeHtml(roundLabel(m.round) || `Groupe ${m.group || "-"}`)}</td>
-        <td>${escapeHtml(homeLabel)}</td>
-        <td>${escapeHtml(awayLabel)}</td>
-        <td><b>${pickLabel}</b></td>
-      </tr>
-    `;
-  }).join("");
+function renderPicksTable(userData, label, options = {}){
+  const title = options.title || `Les pronos de ${label}`;
+  const groupMatches = (state.matches.groupStage || []).slice().sort((a, b) => a.id - b.id);
+  const groupedByLetter = new Map();
+  for (const m of groupMatches){
+    if (!groupedByLetter.has(m.group)) groupedByLetter.set(m.group, []);
+    groupedByLetter.get(m.group).push(m);
+  }
+
+  const groupBlocks = [...groupedByLetter.entries()].map(([group, matches]) => `
+    <article class="group-card">
+      <h3>Groupe ${escapeHtml(group)}</h3>
+      <div class="group-team-list">
+        ${matches.map((m) => {
+          const teams = getMatchDisplayTeams(userData, m);
+          const pickValue = userData.picks?.[String(m.id)] || "-";
+          const pickLabel = pickValue === "H" ? "1" : pickValue === "A" ? "2" : pickValue === "D" ? "N" : "-";
+          return `
+            <div class="group-team-row">
+              <span class="group-team-name">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
+              <span class="vs-chip">vs</span>
+              <span class="group-team-name">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
+              <span class="badge">${pickLabel}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </article>
+  `).join("");
+
   return `
-    <div class="table-wrap">
-      <table class="picks-table">
-        <thead>
-          <tr><th>#</th><th>Tour</th><th>Équipe 1</th><th>Équipe 2</th><th>Prono ${escapeHtml(label)}</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <section>
+      <h2>${escapeHtml(title)}</h2>
+      <div class="groups-visual-grid">${groupBlocks}</div>
+    </section>
+    <div class="hr"></div>
+    <section>
+      <h2>Tableau final en entonnoir</h2>
+      ${renderBracketFunnel(userData, false)}
+    </section>
   `;
 }
 
@@ -1301,7 +1314,6 @@ function getTeamFlag(teamName){
     croatie: "🇭🇷",
     jordanie: "🇯🇴",
     maroc: "🇲🇦",
-    "ri iran": "🇮🇷",
     "rd congo": "🇨🇩",
     ouzbekistan: "🇺🇿",
     angleterre: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
@@ -1329,7 +1341,7 @@ function getTeamFlag(teamName){
     tunisia: "🇹🇳",
     belgium: "🇧🇪",
     egypt: "🇪🇬",
-    "ir iran": "🇮🇷",
+    iran: "🇮🇷",
     "new zealand": "🇳🇿",
     spain: "🇪🇸",
     "cabo verde": "🇨🇻",
