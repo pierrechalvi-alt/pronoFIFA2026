@@ -1793,7 +1793,7 @@ function normalizeMatchDateKey(value){
 function computeRoundWinnerStats(){
   const users = Object.values(state.data.users || {});
   const rounds = ["R32", "R16", "QF", "SF", "FINAL"];
-  return rounds.map((round) => {
+  const statsByRound = rounds.map((round) => {
     const matches = state.matches.knockout.filter((m) => m.round === round);
     const counts = new Map();
     let total = 0;
@@ -1816,6 +1816,33 @@ function computeRoundWinnerStats(){
         .map(([name, count]) => ({ name, rate: Math.round((count / Math.max(1, total)) * 100) }))
     };
   }).filter((entry) => entry.teams.length);
+
+  const finalMatches = state.matches.knockout.filter((m) => m.round === "FINAL");
+  const winnerCounts = new Map();
+  let winnerTotal = 0;
+  for (const match of finalMatches){
+    for (const u of users){
+      const p = u.picks?.[String(match.id)];
+      if (!p) continue;
+      const teams = getMatchDisplayTeams(u, match);
+      const winner = p === "H" ? teams.homeLabel : p === "A" ? teams.awayLabel : null;
+      if (!winner) continue;
+      winnerCounts.set(winner, (winnerCounts.get(winner) || 0) + 1);
+      winnerTotal += 1;
+    }
+  }
+
+  if (winnerCounts.size){
+    statsByRound.push({
+      round: "Vainqueur",
+      teams: [...winnerCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, rate: Math.round((count / Math.max(1, winnerTotal)) * 100) }))
+    });
+  }
+
+  return statsByRound;
 }
 
 function roundLabel(r){
