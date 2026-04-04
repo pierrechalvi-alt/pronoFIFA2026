@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pronofifa2026-community
+    env: node
+    plan: free
+    autoDeploy: true
+    buildCommand: echo "No build step required"
+    startCommand: node community-server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: COMMUNITY_PORT
+        value: 10000

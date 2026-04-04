@@ -37,10 +37,22 @@ Valeurs configurées :
 
 ```js
 window.__FWC26_CANONICAL_ORIGIN__ = "https://pierrechalvi-alt.github.io";
-window.__FWC26_COMMUNITY_API__ = "https://pierrechalvi-alt.github.io/pronoFIFA2026";
+window.__FWC26_COMMUNITY_API__ = "https://pronofifa2026-community.onrender.com";
 ```
 
 ⚠️ `github.io` sert uniquement des fichiers statiques : pour avoir les fonctions communes en temps réel, il faut un backend Node séparé pour `/api/health`, `/api/snapshot`, `/api/stream`.
+
+### Backend prêt à déployer (Render)
+
+Le repo contient maintenant `render.yaml` avec le service :
+`pronofifa2026-community` (URL attendue : `https://pronofifa2026-community.onrender.com`).
+
+Étapes :
+
+1. Connecte le repo sur Render.
+2. Choisis **Blueprint** deploy (Render lit `render.yaml`).
+3. Attends le déploiement.
+4. Vérifie : `https://pronofifa2026-community.onrender.com/api/health`.
 
 ## Mise en place rapide (LAN ou internet)
 
