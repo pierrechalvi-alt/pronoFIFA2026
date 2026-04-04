@@ -288,7 +288,7 @@ code{color:#0c59cf}
 
 .mini-table{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px}
 
-.groups-visual-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.groups-visual-grid{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
 .group-card{background:#fff;border:1px solid #d9d9d9;border-radius:8px;padding:10px}
 .group-card h3{color:#111;margin:0 0 8px;text-transform:uppercase;letter-spacing:.6px;font-size:14px}
 .group-team-list{display:flex;flex-direction:column;gap:7px}
@@ -306,13 +306,12 @@ code{color:#0c59cf}
   align-items:center;
 }
 .pick-team-name{
-  white-space:normal;
-  overflow:visible;
-  text-overflow:clip;
-  word-break:normal;
-  overflow-wrap:anywhere;
-  word-break:break-word;
-  line-height:1.1;
+  display:block;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.2;
   text-align:center;
 }
 .predicted-winner{
@@ -451,6 +450,9 @@ code{color:#0c59cf}
   .group-team-name{
     font-size:12px;
   }
+  .groups-visual-grid{
+    grid-template-columns:repeat(1,minmax(0,1fr));
+  }
   .picks-groups-grid{
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
@@ -464,6 +466,9 @@ code{color:#0c59cf}
 }
 
 @media (min-width: 761px) and (max-width: 1060px){
+  .groups-visual-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
   .picks-groups-grid{
     grid-template-columns:repeat(3,minmax(0,1fr));
   }
@@ -473,6 +478,9 @@ code{color:#0c59cf}
 }
 
 @media (min-width: 1061px) and (max-width: 1320px){
+  .groups-visual-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
   .picks-groups-grid{
     grid-template-columns:repeat(4,minmax(0,1fr));
   }
