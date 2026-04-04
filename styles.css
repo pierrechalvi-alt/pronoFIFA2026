@@ -317,7 +317,8 @@ code{color:#0c59cf}
 .leaderboard-table tbody tr:hover{background:#f5f7fa}
 .leaderboard-table tbody tr.active{background:#e8f0ff}
 
-.match-card{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:8px}
+.match-card{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:8px;text-align:center}
+.match-card span,.match-card b{min-width:0}
 
 @media (max-width: 760px){
   .match{grid-template-columns: 1fr;gap:8px}
