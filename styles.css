@@ -403,6 +403,9 @@ code{color:#0c59cf}
     padding:0 10px 20px;
     font-size:12px;
   }
+  .match-duel,.match-card{grid-template-columns:1fr}
+  .topbar{padding:14px 14px;align-items:center;flex-direction:column}
+  .container{padding-top:16px}
 }
 
 .compact-tabs .tab{padding:7px 10px;font-size:12px}
