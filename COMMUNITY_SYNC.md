@@ -12,6 +12,7 @@ node community-server.js
 2. Ouvre l’app depuis ce serveur sur chaque appareil (ex : `http://IP_DU_SERVEUR:8787`).
 
 3. Optionnel : force une URL API différente côté front (`index.html`) :
+2. Configure l’URL API côté front (`index.html`) :
 
 ```html
 <meta name="fwc26-community-api" content="http://IP_DU_SERVEUR:8787" />
@@ -20,6 +21,7 @@ node community-server.js
 4. Recharge l’application sur chaque appareil.
 
 > Si aucun endpoint n’est configuré, le front tente automatiquement `window.location.origin` (mode le plus simple en LAN).
+3. Recharge l’application sur chaque appareil.
 
 ## Endpoints exposés
 

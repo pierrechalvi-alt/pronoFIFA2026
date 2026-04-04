@@ -296,6 +296,7 @@ function resolveCommunityApiBase(){
     }
     return "";
   }
+  if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
