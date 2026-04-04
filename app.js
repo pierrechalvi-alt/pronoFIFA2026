@@ -717,7 +717,7 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "matches";
+  state.hubTab = "leaderboard";
   saveAll();
   render();
 }
