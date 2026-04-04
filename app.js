@@ -1198,18 +1198,15 @@ function renderPicksTable(userData, label, options = {}){
       <div class="group-team-list">
         ${matches.map((m) => {
           const teams = getMatchDisplayTeams(userData, m);
-          const homeTeamLabel = formatTeamShortName(teams.homeLabel);
-          const awayTeamLabel = formatTeamShortName(teams.awayLabel);
           const pickValue = userData.picks?.[String(m.id)] || "-";
           const homeWinnerClass = pickValue === "H" ? "predicted-winner" : "";
           const awayWinnerClass = pickValue === "A" ? "predicted-winner" : "";
           const drawClass = pickValue === "D" ? "predicted-draw" : "";
           return `
             <div class="group-team-row pick-duel-row">
-              <span class="group-team-name pick-team-name ${homeWinnerClass}" title="${escapeAttr(teams.homeLabel)}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(homeTeamLabel)}</span>
+              <span class="group-team-name pick-team-name ${homeWinnerClass}" title="${escapeAttr(teams.homeLabel)}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
               <span class="vs-chip ${drawClass}">${pickValue === "D" ? "Nul" : "vs"}</span>
-              <span class="group-team-name pick-team-name ${awayWinnerClass}" title="${escapeAttr(teams.awayLabel)}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(awayTeamLabel)}</span>
-              <span class="group-team-name pick-team-name ${awayWinnerClass}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
+              <span class="group-team-name pick-team-name ${awayWinnerClass}" title="${escapeAttr(teams.awayLabel)}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
             </div>
           `;
         }).join("")}
@@ -1220,7 +1217,6 @@ function renderPicksTable(userData, label, options = {}){
   return `
     <section>
       <h2>${escapeHtml(title)}</h2>
-      <small>Format compact : 4 colonnes × 3 groupes pour une lecture homogène.</small>
       <div class="groups-visual-grid picks-groups-grid">${groupBlocks}</div>
     </section>
     <div class="hr"></div>
