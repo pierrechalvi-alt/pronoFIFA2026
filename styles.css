@@ -1,13 +1,4 @@
  :root{
-  --bg: #050816;
-  --bg-deep:#090f2a;
-  --card: rgba(8, 15, 38, 0.78);
-  --card-strong: rgba(13, 21, 50, 0.92);
-  --text: #ecf2ff;
-  --muted: #a7b4d3;
-  --line: rgba(106, 132, 199, .55);
-  --line-strong: rgba(131, 170, 255, .85);
-  --shadow: 0 16px 34px rgba(1,5,18,0.42);
   --bg: #eef3fb;
   --bg-deep:#d9e6ff;
   --card: rgba(255,255,255,0.82);
@@ -31,9 +22,6 @@ body{
   margin:0;
   font-family: "Space Grotesk", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
   background:
-    radial-gradient(900px 430px at 16% 5%, rgba(122, 0, 255, .26), transparent 62%),
-    radial-gradient(980px 500px at 86% 6%, rgba(0, 224, 255, .18), transparent 58%),
-    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 58%, #02030c 100%);
     radial-gradient(1100px 500px at 0% -5%, rgba(18,184,134,.16), transparent 60%),
     radial-gradient(900px 450px at 100% 0%, rgba(29,78,216,.14), transparent 58%),
     linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 42%, #f4f7ff 100%);
@@ -48,8 +36,6 @@ body{
   position:sticky;top:0;z-index:10;
   display:flex;gap:16px;align-items:center;justify-content:space-between;
   padding:18px 20px;
-  background: linear-gradient(90deg, rgba(10,18,46,.84), rgba(13,29,74,.84));
-  backdrop-filter: blur(10px);
   background: linear-gradient(90deg, rgba(255,255,255,0.88), rgba(240,246,255,0.88));
   backdrop-filter: blur(8px);
   border-bottom:2px solid var(--line);
@@ -115,7 +101,7 @@ input, select{
   padding:12px 12px;
   border-radius:14px;
   border:2px solid var(--line);
-  background: rgba(7,12,30,.72);
+  background: rgba(255,255,255,.96);
   color: var(--text);
   outline:none;
 }
