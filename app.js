@@ -8,7 +8,7 @@ const state = {
   me: null,
   onboardingStep: "welcome", // welcome | app
   view: "overview",
-  hubTab: "matches", // matches | leaderboard | myPicks | stats
+  hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
   matches: null,
@@ -250,6 +250,13 @@ function renderWelcome(){
           <label>Mot de passe</label>
           <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
         </div>
+        <div class="field">
+          <label>Équipe favorite (optionnel)</label>
+          <select id="favoriteTeam">
+            <option value="">— Choisir —</option>
+            ${Object.values(state.teams?.teamsByGroup || {}).flat().map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+          </select>
+        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="authBtn">Entrer dans le tournoi</button>
@@ -261,8 +268,9 @@ function renderWelcome(){
     const firstName = document.getElementById("firstName").value.trim();
     const lastName  = document.getElementById("lastName").value.trim();
     const password = document.getElementById("password").value;
+    const favoriteTeam = document.getElementById("favoriteTeam").value || "";
     if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
-    const profile = { firstName, lastName, nickname: "" };
+    const profile = { firstName, lastName, nickname: "", favoriteTeam };
     const key = userKey(profile);
     const existing = state.data.users?.[key];
     if (existing) {
@@ -346,15 +354,15 @@ function renderTournamentHub(){
     </section>
     <section class="card" style="margin-top:12px">
       <div class="tabs">
-        <div class="tab ${state.hubTab==="matches"?"active":""}" data-hubtab="matches">Matchs</div>
         <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
         <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
         <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
       </div>
-      ${state.hubTab === "matches" ? renderTournamentMatchesCenter() : ""}
+      ${renderTournamentMatchesCenter()}
+      <div class="hr"></div>
       ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
       ${state.hubTab === "stats" ? renderStatsView() : ""}
-      ${state.hubTab === "myPicks" ? renderBracketFunnel(currentUser(), false) : ""}
+      ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
     </section>
   `;
 }
@@ -492,15 +500,16 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Favori</th><th>Statut</th></tr>
+          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th><th>Pronos</th><th>Complétion</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
             <tr class="${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
               <td>#${idx + 1}</td>
               <td>${escapeHtml(r.label)}</td>
-              <td>${r.favoriteTeam ? `${getTeamFlag(r.favoriteTeam)} ${escapeHtml(r.favoriteTeam)}` : "—"}</td>
-              <td><span class="badge a1">104/104 validé</span></td>
+              <td>${escapeHtml(r.favoriteTeam || "—")}</td>
+              <td>${r.done}/${r.total}</td>
+              <td>${Math.round((r.done / r.total) * 100)}%</td>
             </tr>
           `).join("")}
         </tbody>
@@ -521,27 +530,20 @@ function renderStatsView(){
   return `
     <h2>Matchs du jour</h2>
     ${todayStats.length ? todayStats.map((item) => `
-      <div class="stats-card">
-        <b>${escapeHtml(item.match)}</b>
-        ${item.details.map((d) => `
-          <div class="stat-line">
-            <span>${getTeamFlag(d.team)} ${escapeHtml(d.team)}</span>
-            <div class="stat-bar"><i style="width:${d.rate}%"></i></div>
-            <span>${d.rate}%</span>
-          </div>
-        `).join("")}
+      <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0">
+        <span>${escapeHtml(item.match)}</span>
+        <span class="badge a2">${escapeHtml(item.breakdown)}</span>
       </div>
     `).join("") : `<small>Aucun match daté aujourd'hui.</small>`}
     <div class="hr"></div>
     <h2>Tendances par phase finale</h2>
     ${roundStats.map((item) => `
-      <div class="stats-card">
+      <div style="margin-bottom:10px">
         <b>${escapeHtml(item.round)}</b>
         ${item.teams.map((team) => `
-          <div class="stat-line">
+          <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
             <span>${getTeamFlag(team.name)} ${escapeHtml(team.name)}</span>
-            <div class="stat-bar"><i style="width:${team.rate}%"></i></div>
-            <span>${team.rate}%</span>
+            <span class="badge">${team.rate}%</span>
           </div>
         `).join("")}
       </div>
@@ -574,47 +576,6 @@ function renderTournamentMatchesCenter(){
         <h2>Matchs à venir</h2>
         ${renderList(upcoming, false)}
       </div>
-    </div>
-  `;
-}
-
-function renderBracketFunnel(userData, interactive){
-  const rounds = [
-    { key: "R32", title: "32e", className: "r32" },
-    { key: "R16", title: "16e", className: "r16" },
-    { key: "QF", title: "1/4", className: "qf" },
-    { key: "SF", title: "1/2", className: "sf" },
-    { key: "FINAL", title: "Finale", className: "final" }
-  ];
-  const u = currentUser();
-  return `
-    <div class="funnel-wrap">
-      ${rounds.map((round) => {
-        const matches = (state.matches.knockout || []).filter((m) => m.round === round.key);
-        if (!matches.length) return "";
-        return `
-          <div class="funnel-col ${round.className}">
-            <h3>${round.title}</h3>
-            ${matches.map((m) => {
-              const teams = getMatchDisplayTeams(userData, m);
-              const pickValue = userData.picks?.[String(m.id)] || "";
-              const locked = Boolean(u.finalSubmittedAt);
-              return `
-                <div class="funnel-match ${interactive ? "interactive" : ""}" data-matchid="${m.id}">
-                  <div class="funnel-team ${pickValue==="H" ? "win" : ""}">
-                    <span>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
-                    ${interactive ? `<button class="pick ${pickValue==="H"?"active":""}" data-pick="H" ${locked ? "disabled" : ""}>1</button>` : ""}
-                  </div>
-                  <div class="funnel-team ${pickValue==="A" ? "win" : ""}">
-                    <span>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
-                    ${interactive ? `<button class="pick ${pickValue==="A"?"active":""}" data-pick="A" ${locked ? "disabled" : ""}>2</button>` : ""}
-                  </div>
-                </div>
-              `;
-            }).join("")}
-          </div>
-        `;
-      }).join("")}
     </div>
   `;
 }
@@ -1193,11 +1154,12 @@ function computeTodayMatchStats(){
       counts.set(winner, (counts.get(winner) || 0) + 1);
       total += 1;
     }
-    const details = [...counts.entries()]
+    const breakdown = [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([team, count]) => ({ team, rate: Math.round((count / Math.max(1, total)) * 100) }));
+      .map(([team, count]) => `${Math.round((count / Math.max(1, total)) * 100)}% ${team}`)
+      .join(" • ");
     const info = getMatchDisplayTeams(currentUser(), m);
-    return { match: `${info.homeLabel} vs ${info.awayLabel}`, details };
+    return { match: `${info.homeLabel} vs ${info.awayLabel}`, breakdown: breakdown || "Aucun prono" };
   });
 }
 

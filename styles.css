@@ -321,61 +321,6 @@ code{color:#1d3a85}
   align-items:center;
   gap:8px;
 }
-.funnel-wrap{
-  display:grid;
-  grid-template-columns:repeat(5,minmax(180px,1fr));
-  gap:12px;
-  overflow:auto;
-  padding-bottom:8px;
-}
-.funnel-col h3{
-  margin:0 0 10px;
-  font-size:14px;
-  color:#b8ccff;
-}
-.funnel-match{
-  border:1px solid var(--line);
-  border-radius:12px;
-  background:rgba(11,18,38,.86);
-  padding:8px;
-  margin-bottom:10px;
-}
-.funnel-team{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:6px;
-  font-size:12px;
-  padding:6px;
-  border-radius:8px;
-}
-.funnel-team.win{background:rgba(18,184,134,.16)}
-.stats-card{
-  border:1px solid var(--line);
-  border-radius:12px;
-  padding:10px;
-  background:rgba(11,18,38,.86);
-  margin-bottom:10px;
-}
-.stat-line{
-  display:grid;
-  grid-template-columns:minmax(120px,1fr) 2fr auto;
-  gap:8px;
-  align-items:center;
-  font-size:12px;
-  margin-top:8px;
-}
-.stat-bar{
-  height:8px;
-  border-radius:999px;
-  background:rgba(255,255,255,.09);
-  overflow:hidden;
-}
-.stat-bar i{
-  display:block;
-  height:100%;
-  background:linear-gradient(90deg,var(--a2),var(--a1));
-}
 .picks-table{
   width:100%;
   border-collapse:collapse;
