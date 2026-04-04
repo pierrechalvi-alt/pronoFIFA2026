@@ -152,6 +152,9 @@ function ensureUser(){
       picks: {},          // matchId -> "H" | "D" | "A"
       qualifiers: {},     // group -> { first, second } (optionnel)
       bonusGoals: null,
+      groupSubmittedAt: null,
+      qualifiersSubmittedAt: null,
+      koSubmittedAt: null,
       finalSubmittedAt: null,
       tieBreakerSubmittedAt: null
     };
@@ -181,8 +184,10 @@ function logout(){
 
 function pick(matchId, val){
   const u = currentUser();
-  if (u.finalSubmittedAt) return;
   const match = getMatchById(matchId);
+  if (!match) return;
+  if (match.stage === "GROUP" && u.groupSubmittedAt) return;
+  if (match.stage === "KO" && u.koSubmittedAt) return;
   if (match?.stage === "KO" && val === "D") {
     alert("À partir des seizièmes, le match nul n'est pas autorisé. Choisis le qualifié (1 ou 2).");
     return;
@@ -323,6 +328,7 @@ function renderApp(){
       <div id="panel"></div>
     </div>
   `;
+}
 
   document.getElementById("filterText").oninput = (e) => {
     state.filterText = e.target.value;
@@ -333,9 +339,45 @@ function renderApp(){
     render();
   };
 
-  for (const el of document.querySelectorAll(".tab")){
-    el.onclick = () => { state.view = el.dataset.view; render(); };
+function renderPostSubmissionHub(){
+  return `
+    <div class="tabs">
+      <div class="tab ${state.hubTab==="dashboard"?"active":""}" data-hubtab="dashboard">Matchs (passés/en cours/avenir)</div>
+      <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
+      <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement général</div>
+      <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
+    </div>
+    ${state.hubTab === "dashboard" ? renderMatchStatusBoard() : ""}
+    ${state.hubTab === "myPicks" ? renderBracketTable(currentUser()) : ""}
+    ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
+    ${state.hubTab === "stats" ? renderStatsView() : ""}
+  `;
+}
+
+function renderMatchStatusBoard(){
+  const now = new Date();
+  const all = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
+  const passed = [];
+  const live = [];
+  const upcoming = [];
+  for (const m of all){
+    const dt = buildMatchDate(m);
+    if (!dt) {
+      upcoming.push(m);
+      continue;
+    }
+    const diff = dt.getTime() - now.getTime();
+    if (diff < -2 * 60 * 60 * 1000) passed.push(m);
+    else if (Math.abs(diff) <= 2 * 60 * 60 * 1000) live.push(m);
+    else upcoming.push(m);
   }
+  return `
+    <h2>Matchs passés, en cours et à venir</h2>
+    ${renderMatchList("En cours", live)}
+    ${renderMatchList("À venir", upcoming.slice(0, 15))}
+    ${renderMatchList("Passés", passed.slice(-15).reverse())}
+  `;
+}
 
   const panel = document.getElementById("panel");
   if (state.view === "overview") panel.innerHTML = renderOverview();
@@ -579,6 +621,14 @@ function wireMatchButtons(){
 
   const finalBtn = document.getElementById("finalBtn");
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
+  const submitGroupsBtn = document.getElementById("submitGroupsBtn");
+  if (submitGroupsBtn) submitGroupsBtn.onclick = () => submitGroupStage();
+  const submitQualifiersBtn = document.getElementById("submitQualifiersBtn");
+  if (submitQualifiersBtn) submitQualifiersBtn.onclick = () => submitQualifiersStage();
+  const submitKOBtn = document.getElementById("submitKOBtn");
+  if (submitKOBtn) submitKOBtn.onclick = () => submitKOStage();
+  const submitBonusBtn = document.getElementById("submitBonusBtn");
+  if (submitBonusBtn) submitBonusBtn.onclick = () => submitTieBreaker();
 }
 
 function wireQualifs(){
@@ -605,19 +655,51 @@ function submitFinalPicks(){
   render();
 }
 
+function submitGroupStage(){
+  const u = currentUser();
+  const total = state.matches.groupStage.length;
+  const done = countPicksByStage(u, "GROUP");
+  if (done !== total) return alert(`Il manque ${total - done} match(s) de poules.`);
+  u.groupSubmittedAt = new Date().toISOString();
+  saveAll();
+  render();
+}
+
+function submitQualifiersStage(){
+  const u = currentUser();
+  for (const group of state.teams.groups || []){
+    const q = u.qualifiers[group];
+    if (!q?.first || !q?.second) return alert(`Complète les qualifiés du groupe ${group}.`);
+    if (q.first === q.second) return alert(`Le groupe ${group} doit avoir 2 équipes différentes.`);
+  }
+  u.qualifiersSubmittedAt = new Date().toISOString();
+  saveAll();
+  render();
+}
+
+function submitKOStage(){
+  const u = currentUser();
+  const total = state.matches.knockout.length;
+  const done = countPicksByStage(u, "KO");
+  if (done !== total) return alert(`Il manque ${total - done} match(s) en phase finale.`);
+  const now = new Date().toISOString();
+  u.koSubmittedAt = now;
+  u.finalSubmittedAt = now;
+  saveAll();
+  render();
+}
+
 function submitTieBreaker(){
   const u = currentUser();
-  if (!u.finalSubmittedAt) return;
+  if (!u.koSubmittedAt) return;
   if (!Number.isFinite(u.bonusGoals)) {
     alert("Entre un nombre valide pour la question subsidiaire.");
     return;
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "leaderboard";
+  state.hubTab = "dashboard";
   saveAll();
-  alert("Merci ! Ton profil joueur est complet 🎉");
-  state.view = "recap";
   render();
 }
 
