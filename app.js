@@ -1,6 +1,5 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
-const ASSET_BASE_URL = new URL("./", import.meta.url);
 
 const LS_KEY = "fwc26_pronos_v1";
 
@@ -9,7 +8,7 @@ const state = {
   onboardingStep: "welcome", // welcome | app
   view: "picks",
   selectedGroup: "A",
-  hubTab: "leaderboard", // leaderboard | myPicks | stats
+  hubTab: "leaderboard", // leaderboard | myPicks | stats | matches
   selectedLeaderboardUserKey: null,
   teams: null,
   matches: null,
@@ -222,7 +221,11 @@ function setQualifier(group, which, team){
 
 function render(){
   USERBOX.innerHTML = state.me
-    ? `<span class="badge a1">👤 ${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
+    ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
+         ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
+         <span class="badge a1">👤 ${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
+       </button>
+       <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
     : `<span class="badge">Non connecté</span>`;
 
@@ -230,6 +233,12 @@ function render(){
     queueMicrotask(()=>{
       const b = document.getElementById("logoutBtn");
       if (b) b.onclick = logout;
+      const trigger = document.getElementById("profileTrigger");
+      const avatarInput = document.getElementById("avatarInput");
+      if (trigger && avatarInput) {
+        trigger.onclick = () => avatarInput.click();
+        avatarInput.onchange = (e) => handleAvatarUpload(e.target.files?.[0]);
+      }
     });
   }
 
@@ -357,17 +366,18 @@ function renderPredictionJourney(){
 function renderTournamentHub(){
   return `
     <section class="card">
-      <h1>Tournoi en direct — FIFA World Cup 2026</h1>
-      <p>Retrouve ici les matchs passés / à venir, le classement des joueurs et les tendances statistiques.</p>
+      <h1>Tournoi en direct — Coupe du Monde FIFA 2026</h1>
+      <p>Retrouve ici le classement des joueurs, les tendances statistiques et les matchs sur un onglet dédié.</p>
     </section>
     <section class="card" style="margin-top:12px">
       <div class="tabs">
+        <div class="tab ${state.hubTab==="matches"?"active":""}" data-hubtab="matches">Matchs</div>
         <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
         <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
         <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
       </div>
-      ${renderTournamentMatchesCenter()}
-      <div class="hr"></div>
+      ${state.hubTab === "matches" ? renderTournamentMatchesCenter() : ""}
+      ${state.hubTab === "matches" ? `<div class="hr"></div>` : ""}
       ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
       ${state.hubTab === "stats" ? renderStatsView() : ""}
       ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
@@ -560,16 +570,14 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Vainqueur pronostiqué</th><th>Pronos</th><th>Complétion</th></tr>
+          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
             <tr class="${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
               <td>#${idx + 1}</td>
-              <td>${escapeHtml(r.label)}</td>
-              <td>${escapeHtml(r.favoriteTeam || "—")}</td>
-              <td>${r.done}/${r.total}</td>
-              <td>${Math.round((r.done / r.total) * 100)}%</td>
+              <td><span class="player-inline">${renderAvatar(r.profilePhoto, r.label)} ${escapeHtml(r.label)}</span></td>
+              <td title="${escapeAttr(r.favoriteTeam || "Non défini")}">${r.favoriteFlag} ${escapeHtml(r.favoriteTeam || "—")}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -633,11 +641,38 @@ function renderTournamentMatchesCenter(){
         ${renderList(past, true)}
       </div>
       <div>
-        <h2>Matchs à venir</h2>
+        <h2>Matchs à venir / en direct</h2>
         ${renderList(upcoming, false)}
       </div>
     </div>
   `;
+}
+
+function handleAvatarUpload(file){
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Merci de choisir un fichier image.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const u = currentUser();
+    if (!u) return;
+    const dataUrl = String(reader.result || "");
+    u.profilePhoto = dataUrl;
+    if (u.profile) u.profile.profilePhoto = dataUrl;
+    if (state.me) state.me.profilePhoto = dataUrl;
+    saveAll();
+    render();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderAvatar(photoDataUrl, alt){
+  if (photoDataUrl) {
+    return `<img class="avatar-bubble" src="${escapeAttr(photoDataUrl)}" alt="${escapeAttr(alt || "Photo profil")}" />`;
+  }
+  return `<span class="avatar-bubble avatar-fallback">${escapeHtml(String(alt || "?").slice(0, 1).toUpperCase())}</span>`;
 }
 
 /* ---------- UI helpers ---------- */
@@ -1219,10 +1254,10 @@ function computeLeaderboard(){
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
       favoriteTeam: inferPredictedWinner(u),
-      done: Object.keys(u.picks || {}).length,
-      total
+      favoriteFlag: getTeamFlag(inferPredictedWinner(u)),
+      profilePhoto: u.profilePhoto || u.profile?.profilePhoto || ""
     }))
-    .sort((a, b) => b.done - a.done);
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function inferPredictedWinner(userData){
