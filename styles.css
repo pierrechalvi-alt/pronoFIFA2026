@@ -60,6 +60,23 @@ body{
   align-items:center;
   text-align:center
 }
+.logo-wordmark{
+  font-weight:900;
+  letter-spacing:.9px;
+  font-size:20px;
+  line-height:1.1;
+  color:#0f172a;
+  text-transform:uppercase;
+  padding:8px 14px;
+  border:2px solid var(--line);
+  border-radius:999px;
+  background:linear-gradient(180deg, #ffffff 0%, #eaf1ff 100%);
+  box-shadow:0 8px 20px rgba(15,23,42,.08);
+  white-space:nowrap;
+}
+.logo-wordmark span{
+  color:var(--a1);
+}
 .logo-official{
   width:54px;
   height:72px;
