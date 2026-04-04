@@ -1518,10 +1518,10 @@ function isFlashLocked(userData){
 }
 
 function computeTodayMatchStats(){
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateKey(new Date());
   const users = Object.values(state.data.users || {});
   const all = [...state.matches.groupStage, ...state.matches.knockout];
-  const todayMatches = all.filter((m) => (m.date || "").slice(0, 10) === today);
+  const todayMatches = all.filter((m) => normalizeMatchDateKey(m.date) === today);
   return todayMatches.map((m) => {
     const counts = { H: 0, D: 0, A: 0 };
     let total = 0;
@@ -1542,6 +1542,23 @@ function computeTodayMatchStats(){
       .join(" • ");
     return { match: `${teams.homeLabel} vs ${teams.awayLabel}`, breakdown: breakdown || "Aucun prono" };
   });
+}
+
+function getLocalDateKey(date){
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeMatchDateKey(value){
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const explicitDay = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (explicitDay) return explicitDay[1];
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return getLocalDateKey(parsed);
 }
 
 function computeRoundWinnerStats(){
