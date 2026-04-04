@@ -9,6 +9,16 @@
   --line-strong: #bdbdbd;
   --shadow: 0 6px 18px rgba(0,0,0,0.08);
   --r: 8px;
+  --bg: #eef3fb;
+  --bg-deep:#d9e6ff;
+  --card: rgba(255,255,255,0.82);
+  --card-strong: rgba(255,255,255,0.92);
+  --text: #0f172a;
+  --muted: #475569;
+  --line: #c7d5ea;
+  --line-strong: #9fb4d4;
+  --shadow: 0 14px 34px rgba(15,23,42,0.10);
+  --r: 16px;
 
   --a1:#0c59cf;
   --a2:#111111;
@@ -22,6 +32,11 @@ body{
   margin:0;
   font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
   background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+  font-family: "Space Grotesk", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+  background:
+    radial-gradient(1100px 500px at 0% -5%, rgba(18,184,134,.16), transparent 60%),
+    radial-gradient(900px 450px at 100% 0%, rgba(29,78,216,.14), transparent 58%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 42%, #f4f7ff 100%);
   color:var(--text);
   overflow-x:hidden;
 }
@@ -34,6 +49,10 @@ body{
   padding:14px 20px;
   background: #030303;
   border-bottom:1px solid #242424;
+  padding:18px 20px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.88), rgba(240,246,255,0.88));
+  backdrop-filter: blur(8px);
+  border-bottom:2px solid var(--line);
 }
 .brand{text-align:center}
 .brand .logo{font-weight:900;letter-spacing:.7px;font-size:24px;color:#fff}
@@ -96,6 +115,9 @@ input, select{
   border-radius:8px;
   border:1px solid var(--line);
   background: #fff;
+  border-radius:14px;
+  border:2px solid var(--line);
+  background: rgba(255,255,255,.96);
   color: var(--text);
   outline:none;
 }
