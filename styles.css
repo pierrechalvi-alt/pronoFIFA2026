@@ -8,6 +8,15 @@
   --line: rgba(106, 132, 199, .55);
   --line-strong: rgba(131, 170, 255, .85);
   --shadow: 0 16px 34px rgba(1,5,18,0.42);
+  --bg: #eef3fb;
+  --bg-deep:#d9e6ff;
+  --card: rgba(255,255,255,0.82);
+  --card-strong: rgba(255,255,255,0.92);
+  --text: #0f172a;
+  --muted: #475569;
+  --line: #c7d5ea;
+  --line-strong: #9fb4d4;
+  --shadow: 0 14px 34px rgba(15,23,42,0.10);
   --r: 16px;
 
   --a1:#12b886;
@@ -25,6 +34,9 @@ body{
     radial-gradient(900px 430px at 16% 5%, rgba(122, 0, 255, .26), transparent 62%),
     radial-gradient(980px 500px at 86% 6%, rgba(0, 224, 255, .18), transparent 58%),
     linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 58%, #02030c 100%);
+    radial-gradient(1100px 500px at 0% -5%, rgba(18,184,134,.16), transparent 60%),
+    radial-gradient(900px 450px at 100% 0%, rgba(29,78,216,.14), transparent 58%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 42%, #f4f7ff 100%);
   color:var(--text);
   overflow-x:hidden;
   background-attachment: fixed;
@@ -38,6 +50,8 @@ body{
   padding:18px 20px;
   background: linear-gradient(90deg, rgba(10,18,46,.84), rgba(13,29,74,.84));
   backdrop-filter: blur(10px);
+  background: linear-gradient(90deg, rgba(255,255,255,0.88), rgba(240,246,255,0.88));
+  backdrop-filter: blur(8px);
   border-bottom:2px solid var(--line);
 }
 .brand{text-align:center}
@@ -173,6 +187,7 @@ input:focus, select:focus{border-color: rgba(34,195,182,.65); box-shadow: 0 0 0 
   border-radius:16px;
   border:2px solid var(--line);
   background: rgba(13,22,52,.82);
+  background: rgba(255,255,255,.9);
   align-items:center;
 }
 .match-duel{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;text-align:center}
@@ -215,6 +230,10 @@ code{color:#7ba4ff}
 .group-card h3{color:#8ad3ff;margin:0 0 8px;text-transform:uppercase;letter-spacing:.6px;font-size:14px}
 .group-team-list{display:flex;flex-direction:column;gap:7px}
 .group-team-row{display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(14,25,62,.9),rgba(24,39,85,.9));border-radius:12px;padding:6px 10px;font-weight:700;color:#ecf2ff}
+.group-card{background:rgba(255,255,255,.88);border:2px solid #c7d5ea;border-radius:14px;padding:10px}
+.group-card h3{color:#1d4ed8;margin:0 0 8px;text-transform:uppercase;letter-spacing:.6px;font-size:14px}
+.group-team-list{display:flex;flex-direction:column;gap:7px}
+.group-team-row{display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,#eef4ff,#f8fbff);border-radius:12px;padding:6px 10px;font-weight:700;color:#0f172a}
 .flag{font-size:18px;line-height:1}
 .group-team-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-team-points{font-size:12px;color:#b8cfff}
