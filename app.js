@@ -299,11 +299,17 @@ function renderApp(){
 
   APP.innerHTML = `
     <section class="card">
-      <h1>${isContestMode ? "Mode concours" : "Vue compétition"}</h1>
-      <div class="row">
+      <h1>${isContestMode ? "Mode concours" : "Mes Pronos"}</h1>
+      <div class="row" style="justify-content:space-between">
         <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>
-        <span class="badge">Progression : ${done}/${total} (${percent}%)</span>
         <span class="badge a4">Qualifiés auto : ${autoQualifiers.qualifiedCount}/24</span>
+      </div>
+      <div class="progress">
+        <div class="progress-bar" style="width:${percent}%"></div>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <small><b>${done}/${total}</b> matchs pronostiqués</small>
+        <small>${Math.max(0, total - done)} restant(s)</small>
       </div>
       <small>${isContestMode
         ? "Ta grille et ta question subsidiaire sont validées : les pronostics sont verrouillés."
@@ -315,10 +321,6 @@ function renderApp(){
         ${renderPostSubmissionHub()}
       ` : `
       <div class="row" style="margin-bottom:10px">
-        <div class="field" style="flex:1; min-width:220px">
-          <label>Recherche rapide (équipe / ville / stade)</label>
-          <input id="filterText" placeholder="Ex: France, New York, Azteca..." value="${escapeAttr(state.filterText)}"/>
-        </div>
         <label class="toggle-wrap">
           <input id="unpickedOnly" type="checkbox" ${state.showUnpickedOnly ? "checked" : ""}/>
           Afficher uniquement les matchs non pronostiqués
@@ -336,10 +338,6 @@ function renderApp(){
     </div>
   `;
   if (!isContestMode) {
-    document.getElementById("filterText").oninput = (e) => {
-      state.filterText = e.target.value;
-      render();
-    };
     document.getElementById("unpickedOnly").onchange = (e) => {
       state.showUnpickedOnly = Boolean(e.target.checked);
       render();
