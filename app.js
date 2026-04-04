@@ -347,6 +347,7 @@ function render(){
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
          <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
+         <span class="badge">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
@@ -848,6 +849,10 @@ function renderTournamentMatchesCenter(){
           <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
         </div>
         ${!withScore ? `<div class="meta">${escapeHtml(schedule || "Date/heure à confirmer")}</div>` : ""}
+      <div class="match-card">
+        <span class="team-col">${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
+        <b class="vs-col">${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
+        <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
       </div>
     `;
   }).join("") : `<small>Aucun match pour le moment.</small>`;
@@ -1185,6 +1190,7 @@ function renderCalendar(){
 
 function renderPicksTable(userData, label, options = {}){
   const title = options.title || `Les pronos de ${label}`;
+function renderPicksTable(userData, label){
   const groupMatches = (state.matches.groupStage || []).slice().sort((a, b) => a.id - b.id);
   const groupedByLetter = new Map();
   for (const m of groupMatches){
@@ -1216,6 +1222,7 @@ function renderPicksTable(userData, label, options = {}){
   return `
     <section>
       <h2>${escapeHtml(title)}</h2>
+      <h2>Vue d'ensemble de la grille — ${escapeHtml(label)}</h2>
       <div class="groups-visual-grid">${groupBlocks}</div>
     </section>
     <div class="hr"></div>
