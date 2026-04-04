@@ -224,11 +224,11 @@ function render(){
   USERBOX.innerHTML = state.me
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
-         <span class="badge a1">👤 ${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
+         <span class="badge">👤 ${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
-    : `<span class="badge">Non connecté</span>`;
+    : `<div style="display:flex; justify-content:center; width:100%"><span class="badge">Non connecté</span></div>`;
 
   if (state.me) {
     queueMicrotask(()=>{
@@ -300,7 +300,7 @@ function renderWelcome(){
 
 function renderApp(){
   const u = currentUser();
-  const isContestMode = Boolean(u.tieBreakerSubmittedAt);
+  const isContestMode = Boolean(u.koSubmittedAt);
   APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
   wireMatchButtons();
   wireHubControls();
@@ -332,13 +332,17 @@ function renderPredictionJourney(){
         <h2>1) Phase de groupes</h2>
         <p>Pronostique d'abord les poules, groupe par groupe, puis continue vers les phases finales.</p>
         <div class="row" style="margin-top:12px">
-          <button class="btn" id="flashGridBtn">${flashLocked ? "⚡ Relancer une grille flash" : "⚡ J’ai la flemme, je lance une grille flash"}</button>
+          <button class="btn alt" id="flashGridBtn">${flashLocked ? "⚡ Relancer une grille flash" : "⚡ J’ai la flemme, je lance une grille flash"}</button>
         </div>
         ${flashLocked ? `<small>Grille flash active : les choix manuels sont verrouillés. Tu peux relancer un flash autant de fois que tu veux avant validation.</small>` : ""}
         <div class="hr"></div>
         ${renderGroups()}
         <div class="row" style="margin-top:12px">
           <button class="btn primary" id="submitGroupsBtn" ${groupDone === groupTotal && !u.groupSubmittedAt ? "" : "disabled"}>Continuer vers les phases finales</button>
+        </div>
+        <div class="group-progress">
+          <div class="progress"><div class="progress-bar" style="width:${Math.round((groupDone / Math.max(1, groupTotal)) * 100)}%"></div></div>
+          <small>Progression poules : ${groupDone}/${groupTotal}</small>
         </div>
         <div class="hr"></div>
         <h2>2) Phases finales</h2>
@@ -571,13 +575,14 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th></tr>
+          <tr><th>Position</th><th>Joueur</th><th>Points</th><th>Équipe favorite</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
             <tr class="${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
-              <td>#${idx + 1}</td>
+              <td class="leaderboard-rank">${idx + 1}</td>
               <td><span class="player-inline">${renderAvatar(r.profilePhoto, r.label)} ${escapeHtml(r.label)}</span></td>
+              <td><b>${r.points}</b> pts</td>
               <td title="${escapeAttr(r.favoriteTeam || "Non défini")}">${r.favoriteFlag} ${escapeHtml(r.favoriteTeam || "—")}</td>
             </tr>
           `).join("")}
@@ -587,7 +592,7 @@ function renderLeaderboardView(){
     ${selectedUser ? `
       <div class="hr"></div>
       <h2>Vue d’ensemble de ${escapeHtml(selectedUser.profile.firstName)} ${escapeHtml(selectedUser.profile.lastName)}</h2>
-      ${renderBracketFunnel(selectedUser, false)}
+      ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
     ` : ""}
   `;
 }
@@ -608,7 +613,7 @@ function renderStatsView(){
     <h2>Tendances par phase finale</h2>
     ${roundStats.map((item) => `
       <div style="margin-bottom:10px">
-        <b>${escapeHtml(item.round)}</b>
+        <div class="round-title">${escapeHtml(item.round)}</div>
         ${item.teams.map((team) => `
           <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
             <span>${getTeamFlag(team.name)} ${escapeHtml(team.name)}</span>
@@ -770,9 +775,15 @@ function submitGroupStage(){
   const u = currentUser();
   const total = state.matches.groupStage.length;
   const done = countPicksByStage(u, "GROUP");
-  if (done !== total) return alert(`Il manque ${total - done} match(s) de poules.`);
+  if (done !== total) {
+    const missingIds = state.matches.groupStage
+      .filter((m) => !u.picks?.[String(m.id)])
+      .map((m) => m.id);
+    return alert(`Il manque ${total - done} match(s) de poules. Matchs à pronostiquer : ${missingIds.join(", ")}.`);
+  }
   u.groupSubmittedAt = new Date().toISOString();
   saveAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
   render();
 }
 
@@ -792,11 +803,22 @@ function submitKOStage(){
   const u = currentUser();
   const total = state.matches.knockout.length;
   const done = countPicksByStage(u, "KO");
-  if (done !== total) return alert(`Il manque ${total - done} match(s) en phase finale.`);
+  if (done !== total) {
+    const missingIds = state.matches.knockout
+      .filter((m) => {
+        const p = u.picks?.[String(m.id)];
+        return p !== "H" && p !== "A";
+      })
+      .map((m) => m.id);
+    return alert(`Il manque ${total - done} match(s) en phase finale. Matchs à pronostiquer : ${missingIds.join(", ")}.`);
+  }
   const now = new Date().toISOString();
   u.koSubmittedAt = now;
   u.finalSubmittedAt = now;
+  alert("Ta grille a été soumise ✅");
+  state.hubTab = "matches";
   saveAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
   render();
 }
 
@@ -1265,15 +1287,39 @@ function computeLeaderboard(){
   const users = Object.entries(state.data.users || {});
   const total = countTotalMatches();
   return users
-    .filter(([, u]) => u?.profile && countPicks(u) === total && u.tieBreakerSubmittedAt)
+    .filter(([, u]) => u?.profile && countPicks(u) === total && u.koSubmittedAt)
     .map(([key, u]) => ({
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
       favoriteTeam: inferPredictedWinner(u),
       favoriteFlag: getTeamFlag(inferPredictedWinner(u)),
-      profilePhoto: u.profilePhoto || u.profile?.profilePhoto || ""
+      profilePhoto: u.profilePhoto || u.profile?.profilePhoto || "",
+      points: computeUserPoints(u)
     }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+}
+
+function getPointsWeight(match){
+  if (match.stage === "GROUP") return 1;
+  const weights = { R32: 2, R16: 4, QF: 16, SF: 32, BRONZE: 16, FINAL: 64 };
+  return weights[match.round] || 0;
+}
+
+function getMatchOutcome(match){
+  if (!Number.isFinite(match?.scoreHome) || !Number.isFinite(match?.scoreAway)) return null;
+  if (match.scoreHome > match.scoreAway) return "H";
+  if (match.scoreHome < match.scoreAway) return "A";
+  return "D";
+}
+
+function computeUserPoints(userData){
+  const allMatches = [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])];
+  return allMatches.reduce((sum, match) => {
+    const outcome = getMatchOutcome(match);
+    if (!outcome) return sum;
+    const pickValue = userData.picks?.[String(match.id)];
+    return pickValue === outcome ? sum + getPointsWeight(match) : sum;
+  }, 0);
 }
 
 function inferPredictedWinner(userData){
