@@ -5,6 +5,7 @@ const LS_KEY = "fwc26_pronos_v1";
 const DB_NAME = "fwc26_pronos_db";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
+const memoryStorage = { value: null };
 
 const state = {
   me: null,
@@ -31,10 +32,14 @@ function registerServiceWorker(){
 }
 
 async function init(){
+  if (!APP || !USERBOX) {
+    console.error("Impossible d'initialiser l'application : éléments racine introuvables.");
+    return;
+  }
   try {
     const [teams, matches] = await Promise.all([
-      fetch("./data/teams.json").then(r=>r.json()),
-      fetch("./data/matches.json").then(r=>r.json())
+      fetchJson("./data/teams.json"),
+      fetchJson("./data/matches.json")
     ]);
     state.teams = teams;
     state.matches = normalizeMatches(matches, teams);
@@ -61,6 +66,14 @@ async function init(){
   }
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
+}
+
+async function fetchJson(url){
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Erreur HTTP ${response.status} sur ${url}`);
+  }
+  return response.json();
 }
 
 function normalizeMatches(m, teams){
@@ -176,7 +189,8 @@ function userKey(profile){
 function loadAll(){
   const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
-    const parsed = JSON.parse(localStorage.getItem(LS_KEY)) || fallback;
+    const raw = readStorageItem(LS_KEY);
+    const parsed = raw ? JSON.parse(raw) : fallback;
     return normalizeDataShape(parsed);
   }
   catch { return fallback; }
@@ -205,8 +219,23 @@ async function hydrateDataStore(){
 
 function saveAll(){
   state.data.updatedAt = Date.now();
-  localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+  writeStorageItem(LS_KEY, JSON.stringify(state.data));
   saveAllToIndexedDB(state.data);
+}
+
+function readStorageItem(key){
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStorage.value;
+  }
+}
+
+function writeStorageItem(key, value){
+  memoryStorage.value = value;
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
 }
 
 function openPronosDb(){
