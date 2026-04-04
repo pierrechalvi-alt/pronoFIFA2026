@@ -46,26 +46,40 @@ body{
 .topbar{
   position:sticky;top:0;z-index:10;
   display:flex;gap:16px;align-items:center;justify-content:space-between;
-  padding:14px 20px;
-  background: #030303;
-  border-bottom:1px solid #242424;
   padding:18px 20px;
   background: linear-gradient(90deg, rgba(255,255,255,0.88), rgba(240,246,255,0.88));
   backdrop-filter: blur(8px);
   border-bottom:2px solid var(--line);
 }
-.brand{text-align:center}
-.brand .logo{font-weight:900;letter-spacing:.7px;font-size:24px;color:#fff}
-.brand .logo span{color:#d4af37}
-.brand .sub{color:#c9c9c9;font-size:12px;margin-top:4px}
-.userbox{color:#d5d5d5;font-size:13px}
+.brand{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center
+}
+.logo-official{
+  width:54px;
+  height:72px;
+  object-fit:contain;
+  display:block;
+}
+.brand .sub{color:var(--muted);font-size:12px;margin-top:4px}
+.userbox{
+  margin-left:auto;
+  color:var(--text);
+  font-size:13px;
+}
 .profile-trigger{
-  border:0;
-  background:transparent;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.9);
   display:inline-flex;
   align-items:center;
   gap:8px;
-  padding:0;
+  padding:6px 10px;
+  border-radius:999px;
   cursor:pointer;
 }
 .avatar-bubble{
@@ -148,6 +162,12 @@ input:focus, select:focus{border-color: #0c59cf; box-shadow: 0 0 0 3px rgba(12,8
   background: #0c59cf;
   color:#fff;
 }
+.btn.alt{
+  border-color: var(--line-strong);
+  background: #fff;
+  color:var(--text);
+}
+.btn.alt:hover{background:#f1f5ff;border-color:#93b3e6}
 .btn.danger{border-color: #be123c; background:#fff1f2; color:#9f1239}
 
 .badge{
@@ -181,6 +201,14 @@ input:focus, select:focus{border-color: #0c59cf; box-shadow: 0 0 0 3px rgba(12,8
   font-size:13px;
 }
 .tab.active{background:#111;border-color:#111;color:#fff}
+
+.group-progress{
+  margin-top:8px;
+}
+.group-progress small{
+  display:block;
+  margin-top:4px;
+}
 
 .match{
   display:grid;
@@ -255,6 +283,14 @@ code{color:#0c59cf}
   cursor:pointer;
 }
 .player-row.active{border-color:#0c59cf;background:#ebf2ff}
+.leaderboard-rank{
+  font-weight:800;
+}
+.round-title{
+  font-size:18px;
+  font-weight:900;
+  margin:2px 0 10px;
+}
 
 .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
 .picks-table,.leaderboard-table{width:100%;border-collapse:collapse;min-width:650px;background:#fff}
