@@ -291,6 +291,32 @@ code{color:#0c59cf}
 .flag{font-size:18px;line-height:1}
 .group-team-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-team-points{font-size:12px;color:#b8cfff}
+.picks-groups-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.pick-group-card .group-team-list{gap:8px}
+.pick-duel-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+}
+.pick-team-name{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  line-height:1.2;
+}
+.predicted-winner{
+  font-weight:900;
+  border:2px solid var(--line-strong);
+  border-radius:10px;
+  padding:6px 8px;
+  background:#eef4ff;
+}
+.vs-chip.predicted-draw{
+  border-color:#0c59cf;
+  background:#e8f0ff;
+  font-weight:900;
+}
 
 .bracket-funnel{display:grid;gap:10px}
 .funnel-round{display:grid;gap:8px}
@@ -402,12 +428,27 @@ code{color:#0c59cf}
     align-items:center;
     padding:8px;
   }
+  .pick-duel-row{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  }
+  .group-team-name{
+    font-size:12px;
+  }
+  .picks-groups-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
   .group-team-name{
     font-size:12px;
   }
   .footer{
     padding:0 10px 20px;
     font-size:12px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1060px){
+  .picks-groups-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
   }
   .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
