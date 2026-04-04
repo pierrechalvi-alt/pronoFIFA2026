@@ -356,21 +356,6 @@ function mergeSnapshots(baseRaw, incomingRaw){
   });
 }
 
-function readStorageItem(key){
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return memoryStorage.value;
-  }
-}
-
-function writeStorageItem(key, value){
-  memoryStorage.value = value;
-  try {
-    localStorage.setItem(key, value);
-  } catch {}
-}
-
 function openPronosDb(){
   return new Promise((resolve, reject) => {
     if (!("indexedDB" in window)) return resolve(null);
