@@ -7,7 +7,8 @@ const LS_KEY = "fwc26_pronos_v1";
 const state = {
   me: null,
   onboardingStep: "welcome", // welcome | app
-  view: "overview",
+  view: "picks",
+  selectedGroup: "A",
   hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
@@ -45,6 +46,7 @@ async function init(){
       state.onboardingStep = "app";
     }
   }
+  state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
 }
 
@@ -312,26 +314,30 @@ function renderPredictionJourney(){
       <small>${done}/${total} matchs complétés.</small>
     </section>
     <section class="card" style="margin-top:12px">
-      <h2>1) Phase de groupes</h2>
-      <p>Pronostique d'abord chaque match de poule, puis continue vers les phases finales.</p>
-      ${renderOverview()}
-      <div class="row" style="margin-top:12px">
-        <button class="btn" id="flashGridBtn">${flashLocked ? "⚡ Relancer une grille flash" : "⚡ J’ai la flemme, je lance une grille flash"}</button>
+      <div class="tabs">
+        <div class="tab ${state.view==="picks"?"active":""}" data-view="picks">Saisie des matchs</div>
+        <div class="tab ${state.view==="overview"?"active":""}" data-view="overview">Récap poules & tableau</div>
       </div>
-      ${flashLocked ? `<small>Grille flash active : les choix manuels sont verrouillés. Tu peux relancer un flash autant de fois que tu veux avant validation.</small>` : ""}
-      <div class="hr"></div>
-      ${renderGroups()}
-      <div class="row" style="margin-top:12px">
-        <button class="btn primary" id="submitGroupsBtn" ${groupDone === groupTotal && !u.groupSubmittedAt ? "" : "disabled"}>Continuer vers les phases finales</button>
-      </div>
-    </section>
-    <section class="card" style="margin-top:12px">
-      <h2>2) Phases finales</h2>
-      ${u.groupSubmittedAt ? renderKO() : `<p><small>Valide d'abord les matchs de poules (${groupDone}/${groupTotal}).</small></p>`}
-      <div class="row" style="margin-top:12px">
-        <button class="btn danger" id="submitKOBtn" ${u.groupSubmittedAt && koDone === koTotal && !u.koSubmittedAt ? "" : "disabled"}>Je valide définitivement</button>
-      </div>
-      <small>Après ce clic, aucun retour arrière possible.</small>
+      ${state.view === "overview" ? renderOverview() : `
+        <h2>1) Phase de groupes</h2>
+        <p>Pronostique d'abord les poules, groupe par groupe, puis continue vers les phases finales.</p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="flashGridBtn">${flashLocked ? "⚡ Relancer une grille flash" : "⚡ J’ai la flemme, je lance une grille flash"}</button>
+        </div>
+        ${flashLocked ? `<small>Grille flash active : les choix manuels sont verrouillés. Tu peux relancer un flash autant de fois que tu veux avant validation.</small>` : ""}
+        <div class="hr"></div>
+        ${renderGroups()}
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="submitGroupsBtn" ${groupDone === groupTotal && !u.groupSubmittedAt ? "" : "disabled"}>Continuer vers les phases finales</button>
+        </div>
+        <div class="hr"></div>
+        <h2>2) Phases finales</h2>
+        ${u.groupSubmittedAt ? renderKO() : `<p><small>Valide d'abord les matchs de poules (${groupDone}/${groupTotal}).</small></p>`}
+        <div class="row" style="margin-top:12px">
+          <button class="btn danger" id="submitKOBtn" ${u.groupSubmittedAt && koDone === koTotal && !u.koSubmittedAt ? "" : "disabled"}>Je valide définitivement</button>
+        </div>
+        <small>Après ce clic, aucun retour arrière possible.</small>
+      `}
     </section>
     <section class="card" style="margin-top:12px">
       <h2>3) Question subsidiaire</h2>
@@ -377,10 +383,11 @@ function renderOverview(){
     const rows = (standings[g] || []).slice(0, 4);
     return `
       <article class="group-card">
-        <h3>Group ${escapeHtml(g)}</h3>
+        <h3>Groupe ${escapeHtml(g)}</h3>
         <div class="group-team-list">
-          ${rows.map((r) => `
+          ${rows.map((r, idx) => `
             <div class="group-team-row">
+              <span class="group-team-rank">${idx + 1}</span>
               <span class="flag">${getTeamFlag(r.team)}</span>
               <span class="group-team-name">${escapeHtml(r.team)}</span>
               <span class="group-team-points">${r.pts} pts</span>
@@ -391,14 +398,14 @@ function renderOverview(){
     `;
   }).join("");
   return `
-    <div class="grid two">
+    <div class="grid" style="gap:14px">
       <section>
         <h2>Récapitulatif des poules</h2>
         <div class="groups-visual-grid">${teamRows}</div>
       </section>
       <section>
-        <h2>Tableau final (dates & lieux)</h2>
-        ${renderBracketTable(u)}
+        <h2>Structure des phases finales</h2>
+        ${renderBracketColumns(u)}
       </section>
     </div>
   `;
@@ -407,16 +414,16 @@ function renderOverview(){
 function renderGroups(){
   const groups = state.teams.groups;
   const gs = state.matches.groupStage;
+  const selectedGroup = groups.includes(state.selectedGroup) ? state.selectedGroup : groups[0];
+  const matches = filterMatches(gs.filter((m) => m.group === selectedGroup));
   let html = `<p>Pronostique les matchs de poule (1 / N / 2). Objectif obligatoire : <b>72/72</b> en phase de groupes.</p>`;
 
-  for (const g of groups){
-    const matches = filterMatches(gs.filter(m => m.group === g));
-    html += `<div class="hr"></div><h2>Groupe ${g}</h2>`;
+  html += `<div class="tabs compact-tabs">${groups.map((g) => `<div class="tab ${selectedGroup===g?"active":""}" data-group="${g}">Groupe ${g}</div>`).join("")}</div>`;
+  html += `<h2>Groupe ${selectedGroup}</h2>`;
 
-    if (!matches.length){
-      html += `<p><small>${state.filterText || state.showUnpickedOnly ? "Aucun match ne correspond aux filtres." : "Aucun match listé pour ce groupe (à compléter dans data/matches.json)."}</small></p>`;
-      continue;
-    }
+  if (!matches.length){
+    html += `<p><small>${state.filterText || state.showUnpickedOnly ? "Aucun match ne correspond aux filtres." : "Aucun match listé pour ce groupe (à compléter dans data/matches.json)."}</small></p>`;
+  } else {
     for (const m of matches) html += matchRow(m);
   }
 
@@ -505,9 +512,9 @@ function renderBracketFunnel(userData, allowEditing){
                     <span class="meta">vs</span>
                     <span>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
                   </div>
-                  <div class="picks picks-visual">
-                    <button class="pick ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>1</button>
-                    <button class="pick ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>2</button>
+                  <div class="picks picks-visual picks-labels">
+                    <button class="pick pick-label ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</button>
+                    <button class="pick pick-label ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</button>
                   </div>
                 </article>
               `;
@@ -654,22 +661,16 @@ function matchRow(m){
 
   return `
     <div class="match" data-matchid="${m.id}">
-      <div>
-        <div class="team">${escapeHtml(homeLabel)}</div>
-        <div class="meta">${escapeHtml(meta)}</div>
+      <div class="meta">${escapeHtml(meta)}</div>
+      <div class="match-duel">
+        <span class="team-chip">${getTeamFlag(homeLabel)} ${escapeHtml(homeLabel)}</span>
+        <span class="vs-chip">VS</span>
+        <span class="team-chip">${getTeamFlag(awayLabel)} ${escapeHtml(awayLabel)}</span>
       </div>
-
-      <div class="meta" style="text-align:center">vs</div>
-
-      <div style="text-align:right">
-        <div class="team">${escapeHtml(awayLabel)}</div>
-        <div class="meta">&nbsp;</div>
-      </div>
-
-      <div class="picks">
-        <button class="pick ${v==="H"?"active":""}" data-pick="H" title="Victoire équipe gauche" ${locked ? "disabled" : ""}>1</button>
-        ${isKO ? "" : `<button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>N</button>`}
-        <button class="pick ${v==="A"?"active":""}" data-pick="A" title="Victoire équipe droite" ${locked ? "disabled" : ""}>2</button>
+      <div class="picks picks-labels">
+        <button class="pick pick-label ${v==="H"?"active":""}" data-pick="H" title="Victoire ${escapeAttr(homeLabel)}" ${locked ? "disabled" : ""}>${getTeamFlag(homeLabel)} ${escapeHtml(homeLabel)}</button>
+        ${isKO ? "" : `<button class="pick pick-label ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>🤝 Nul</button>`}
+        <button class="pick pick-label ${v==="A"?"active":""}" data-pick="A" title="Victoire ${escapeAttr(awayLabel)}" ${locked ? "disabled" : ""}>${getTeamFlag(awayLabel)} ${escapeHtml(awayLabel)}</button>
       </div>
     </div>
   `;
@@ -993,6 +994,41 @@ function getMatchById(id){
     .find((m) => Number(m.id) === Number(id));
 }
 
+
+function renderBracketColumns(userData){
+  const ko = (state.matches.knockout || []).slice().sort((a, b) => a.id - b.id);
+  const rounds = [
+    { key: "R32", label: "Seizièmes" },
+    { key: "R16", label: "Huitièmes" },
+    { key: "QF", label: "Quarts de finale" },
+    { key: "SF", label: "Demi-finales" },
+    { key: "FINAL", label: "Finale" },
+    { key: "BRONZE", label: "3e place" }
+  ];
+
+  const columns = rounds.map((round) => {
+    const items = ko.filter((m) => m.round === round.key);
+    return `
+      <section class="bracket-column">
+        <h3>${round.label}</h3>
+        <div class="bracket-column-matches">
+          ${items.map((m) => {
+            const teams = getMatchDisplayTeams(userData, m);
+            return `
+              <article class="bracket-slot">
+                <div class="slot-team">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</div>
+                <div class="slot-team">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</div>
+              </article>
+            `;
+          }).join("") || `<small>Aucun match</small>`}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  return `<div class="bracket-columns">${columns}</div>`;
+}
+
 function renderBracketTable(userData){
   const ko = (state.matches.knockout || []).slice().sort((a, b) => a.id - b.id);
   return `
@@ -1143,6 +1179,12 @@ function wireHubControls(){
       render();
     };
   }
+  for (const el of document.querySelectorAll("[data-group]")){
+    el.onclick = () => {
+      state.selectedGroup = el.dataset.group;
+      render();
+    };
+  }
   for (const row of document.querySelectorAll("[data-playerkey]")){
     row.onclick = () => {
       state.selectedLeaderboardUserKey = row.dataset.playerkey;
@@ -1195,6 +1237,22 @@ function inferPredictedWinner(userData){
 
 function randomPick(options){
   return options[Math.floor(Math.random() * options.length)];
+}
+
+function generateFlashGrid(){
+  const u = currentUser();
+  const allMatches = [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])];
+  if (!allMatches.length) {
+    alert("Aucun match disponible pour générer une grille flash.");
+    return;
+  }
+  for (const match of allMatches){
+    const options = match.stage === "GROUP" ? ["H", "D", "A"] : ["H", "A"];
+    u.picks[String(match.id)] = randomPick(options);
+  }
+  u.flashLockedAt = new Date().toISOString();
+  saveAll();
+  render();
 }
 
 function isFlashLocked(userData){
