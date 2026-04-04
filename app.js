@@ -10,6 +10,9 @@ let matchLifecycleInterval = null;
 const CLIENT_ID = `client_${Math.random().toString(36).slice(2, 9)}`;
 const SYNC_CHANNEL_NAME = "fwc26_sync";
 let syncChannel = null;
+let communityStream = null;
+let communitySyncTimer = null;
+const COMMUNITY_API_BASE = resolveCommunityApiBase();
 
 const state = {
   me: null,
@@ -59,8 +62,10 @@ async function init(){
   }
 
   await hydrateDataStore();
+  await hydrateCommunitySnapshot();
   requestPersistentStorage();
   setupRealtimeSync();
+  setupCommunityRealtimeSync();
   startMatchLifecycleMonitor();
 
   if (state.data?.lastUserKey) {
@@ -238,7 +243,10 @@ function saveAll(){
 function persistSnapshot(announce){
   writeStorageItem(LS_KEY, JSON.stringify(state.data));
   saveAllToIndexedDB(state.data);
-  if (announce) broadcastSnapshot();
+  if (announce) {
+    broadcastSnapshot();
+    queueCommunitySnapshotPush();
+  }
 }
 
 function readStorageItem(key){
@@ -275,6 +283,76 @@ function setupRealtimeSync(){
     const indexed = await loadAllFromIndexedDB();
     if (indexed) integrateIncomingData(indexed, "indexeddb");
   }, 12000);
+}
+
+function resolveCommunityApiBase(){
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
+  const explicitLocalStorage = readStorageItem("fwc26_community_api");
+  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+async function hydrateCommunitySnapshot(){
+  if (!COMMUNITY_API_BASE) return;
+  try {
+    const response = await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload?.snapshot) return;
+    integrateIncomingData(payload.snapshot, "community-hydrate");
+  } catch (err) {
+    console.warn("Synchronisation communauté indisponible :", err?.message || err);
+  }
+}
+
+function setupCommunityRealtimeSync(){
+  if (!COMMUNITY_API_BASE || typeof EventSource === "undefined") return;
+  try {
+    communityStream = new EventSource(`${COMMUNITY_API_BASE}/api/stream`);
+    communityStream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (!payload?.snapshot || payload.clientId === CLIENT_ID) return;
+        integrateIncomingData(payload.snapshot, "community-stream");
+      } catch {}
+    };
+    communityStream.onerror = () => {
+      if (communityStream) communityStream.close();
+      communityStream = null;
+      setTimeout(setupCommunityRealtimeSync, 4000);
+    };
+  } catch (err) {
+    console.warn("Impossible d'ouvrir le flux communauté :", err?.message || err);
+  }
+}
+
+function queueCommunitySnapshotPush(){
+  if (!COMMUNITY_API_BASE) return;
+  if (communitySyncTimer) clearTimeout(communitySyncTimer);
+  communitySyncTimer = setTimeout(() => {
+    pushCommunitySnapshot().finally(() => {
+      communitySyncTimer = null;
+    });
+  }, 350);
+}
+
+async function pushCommunitySnapshot(){
+  if (!COMMUNITY_API_BASE) return;
+  try {
+    await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: CLIENT_ID,
+        updatedAt: Number(state.data?.updatedAt || Date.now()),
+        snapshot: state.data
+      })
+    });
+  } catch (err) {
+    console.warn("Échec d'envoi vers la communauté :", err?.message || err);
+  }
 }
 
 function broadcastSnapshot(){
