@@ -347,7 +347,6 @@ function render(){
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
          <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
-         <span class="badge">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
@@ -1199,14 +1198,17 @@ function renderPicksTable(userData, label, options = {}){
       <div class="group-team-list">
         ${matches.map((m) => {
           const teams = getMatchDisplayTeams(userData, m);
+          const homeTeamLabel = formatTeamShortName(teams.homeLabel);
+          const awayTeamLabel = formatTeamShortName(teams.awayLabel);
           const pickValue = userData.picks?.[String(m.id)] || "-";
           const homeWinnerClass = pickValue === "H" ? "predicted-winner" : "";
           const awayWinnerClass = pickValue === "A" ? "predicted-winner" : "";
           const drawClass = pickValue === "D" ? "predicted-draw" : "";
           return `
             <div class="group-team-row pick-duel-row">
-              <span class="group-team-name pick-team-name ${homeWinnerClass}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
+              <span class="group-team-name pick-team-name ${homeWinnerClass}" title="${escapeAttr(teams.homeLabel)}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(homeTeamLabel)}</span>
               <span class="vs-chip ${drawClass}">${pickValue === "D" ? "Nul" : "vs"}</span>
+              <span class="group-team-name pick-team-name ${awayWinnerClass}" title="${escapeAttr(teams.awayLabel)}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(awayTeamLabel)}</span>
               <span class="group-team-name pick-team-name ${awayWinnerClass}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
             </div>
           `;
@@ -1276,6 +1278,31 @@ function normalizeName(value){
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function formatTeamShortName(teamName){
+  const raw = String(teamName || "").trim();
+  if (!raw) return "À définir";
+  const normalized = normalizeName(raw);
+  const dictionary = {
+    "etats-unis": "USA",
+    "republique de coree": "Corée",
+    "bosnie-et-herzegovine": "Bosnie",
+    "arabie saoudite": "Arabie",
+    "cote d'ivoire": "Côte d'Ivoire",
+    "nouvelle-zelande": "N.-Zélande",
+    "rd congo": "RD Congo",
+    "angleterre": "England"
+  };
+  if (dictionary[normalized]) return dictionary[normalized];
+  if (raw.length <= 16) return raw;
+  const compact = raw
+    .split(/\s+/)
+    .map((word) => word.replace(/[^A-Za-zÀ-ÿ'-]/g, ""))
+    .filter(Boolean)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+  return compact.length >= 2 ? compact : raw.slice(0, 14);
 }
 
 function getTeamFlag(teamName){
