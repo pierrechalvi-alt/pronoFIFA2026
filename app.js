@@ -356,6 +356,28 @@ function renderApp(){
       </aside>
     </div>
 
+    <section class="card" style="margin-top:14px">
+      <h2>Parcours de pronostic</h2>
+      <div class="flow-steps">
+        <div class="flow-step ${groupDone === groupTotal ? "done" : ""}">
+          <b>1. Phase de groupes</b>
+          <span>${groupDone}/${groupTotal} matchs</span>
+        </div>
+        <div class="flow-step ${koDone === koTotal ? "done" : ""}">
+          <b>2. Phase finale</b>
+          <span>${koDone}/${koTotal} matchs</span>
+        </div>
+        <div class="flow-step ${u.finalSubmittedAt ? "done" : ""}">
+          <b>3. Envoi final</b>
+          <span>${u.finalSubmittedAt ? "verrouillé" : "à valider"}</span>
+        </div>
+        <div class="flow-step ${u.tieBreakerSubmittedAt ? "done" : ""}">
+          <b>4. Subsidiaire</b>
+          <span>${u.tieBreakerSubmittedAt ? "complète" : "à compléter"}</span>
+        </div>
+      </div>
+    </section>
+
     <div class="card" style="margin-top:14px">
       <div class="row" style="margin-bottom:10px">
         <div class="field" style="flex:1; min-width:220px">
@@ -372,6 +394,7 @@ function renderApp(){
         <div class="tab ${state.view==="qualifs"?"active":""}" data-view="qualifs">Qualifiés</div>
         <div class="tab ${state.view==="ko"?"active":""}" data-view="ko">Phase finale</div>
         <div class="tab ${state.view==="recap"?"active":""}" data-view="recap">Récap</div>
+        <div class="tab ${state.view==="community"?"active":""}" data-view="community">Communauté</div>
       </div>
       <div id="panel"></div>
     </div>
@@ -399,6 +422,7 @@ function renderApp(){
   if (state.view === "qualifs") panel.innerHTML = renderQualifs();
   if (state.view === "ko") panel.innerHTML = renderKO();
   if (state.view === "recap") panel.innerHTML = renderRecap();
+  if (state.view === "community") panel.innerHTML = renderPlayerHub();
 
   wireMatchButtons();
   wireQualifs();
@@ -565,17 +589,6 @@ function wireMatchButtons(){
 
   const finalBtn = document.getElementById("finalBtn");
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
-
-  const reset = document.getElementById("resetBtn");
-  if (reset) reset.onclick = () => {
-    if (!confirm("Tout effacer pour cet utilisateur ?")) return;
-    const key = userKey(state.me);
-    delete state.data.users[key];
-    state.me = null;
-    state.data.lastUserKey = null;
-    saveAll();
-    render();
-  };
 }
 
 function wireQualifs(){
