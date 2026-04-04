@@ -52,7 +52,13 @@ async function init(){
 function normalizeMatches(m, teams){
   const providedGroup = Array.isArray(m.groupStage) ? [...m.groupStage] : [];
   const groupStage = buildGroupStageMatches(teams, providedGroup);
-  const knockout = Array.isArray(m.knockout) ? [...m.knockout] : [];
+  const knockout = Array.isArray(m.knockout)
+    ? m.knockout.map((match) => ({
+      ...match,
+      homeLabel: match.homeLabel ?? match.home ?? null,
+      awayLabel: match.awayLabel ?? match.away ?? null
+    }))
+    : [];
   const existing = new Set([...groupStage, ...knockout].map(match => Number(match.id)));
 
   for (let id = 1; id <= 104; id += 1){
@@ -849,7 +855,6 @@ function submitGroupStage(){
   }
   u.groupSubmittedAt = new Date().toISOString();
   saveAll();
-  window.scrollTo({ top: 0, behavior: "smooth" });
   render();
 }
 
@@ -1364,6 +1369,8 @@ function getMatchDisplayTeams(userData, match){
 function resolveKnockoutSlot(label, userData){
   const fallback = label || "À définir";
   const raw = String(label || "");
+  const fromGroupRanking = resolveGroupPlacementLabel(raw, userData);
+  if (fromGroupRanking) return fromGroupRanking;
   const winnerMatchRef = raw.match(/Vainqueur(?:\s+du)?\s+match\s*(\d+)/i);
   if (winnerMatchRef) {
     return pickWinnerName(Number(winnerMatchRef[1]), userData) || fallback;
@@ -1373,6 +1380,43 @@ function resolveKnockoutSlot(label, userData){
     return pickLoserName(Number(loserSemiRef[1]), userData) || fallback;
   }
   return fallback;
+}
+
+function resolveGroupPlacementLabel(rawLabel, userData){
+  const label = String(rawLabel || "");
+  const standings = computeGroupStandingsFromPicks(userData || { picks:{} });
+  const normalized = normalizeName(label).replace(/\s+/g, " ");
+
+  const directSlot = normalized.match(/^([a-l])\s*([123])$/i);
+  if (directSlot) {
+    const group = directSlot[1].toUpperCase();
+    const rankIndex = Number(directSlot[2]) - 1;
+    return standings[group]?.[rankIndex]?.team || null;
+  }
+
+  const rankGroupMatch = normalized.match(/(premier|1er|deuxieme|2e|troisieme|3e)\s+du\s+groupe\s+([a-l])/i);
+  if (rankGroupMatch) {
+    const rankWord = rankGroupMatch[1].toLowerCase();
+    const group = rankGroupMatch[2].toUpperCase();
+    const rankIndex = rankWord.startsWith("premier") || rankWord === "1er"
+      ? 0
+      : (rankWord.startsWith("deux") || rankWord === "2e" ? 1 : 2);
+    return standings[group]?.[rankIndex]?.team || null;
+  }
+
+  const thirdOfGroups = normalized.match(/troisieme\s+du\s+groupe\s+([a-l](?:\/[a-l])*)/i);
+  if (thirdOfGroups) {
+    const allowedGroups = thirdOfGroups[1]
+      .split("/")
+      .map((group) => group.trim().toUpperCase())
+      .filter(Boolean);
+    const candidates = allowedGroups
+      .map((group) => standings[group]?.[2])
+      .filter(Boolean)
+      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || a.team.localeCompare(b.team));
+    return candidates[0]?.team || null;
+  }
+  return null;
 }
 
 function pickWinnerName(matchId, userData){
@@ -1518,10 +1562,10 @@ function isFlashLocked(userData){
 }
 
 function computeTodayMatchStats(){
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateKey(new Date());
   const users = Object.values(state.data.users || {});
   const all = [...state.matches.groupStage, ...state.matches.knockout];
-  const todayMatches = all.filter((m) => (m.date || "").slice(0, 10) === today);
+  const todayMatches = all.filter((m) => normalizeMatchDateKey(m.date) === today);
   return todayMatches.map((m) => {
     const counts = { H: 0, D: 0, A: 0 };
     let total = 0;
@@ -1542,6 +1586,23 @@ function computeTodayMatchStats(){
       .join(" • ");
     return { match: `${teams.homeLabel} vs ${teams.awayLabel}`, breakdown: breakdown || "Aucun prono" };
   });
+}
+
+function getLocalDateKey(date){
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeMatchDateKey(value){
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const explicitDay = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (explicitDay) return explicitDay[1];
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return getLocalDateKey(parsed);
 }
 
 function computeRoundWinnerStats(){
