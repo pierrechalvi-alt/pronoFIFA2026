@@ -122,6 +122,7 @@ body{
   font-size:12px;
 }
 .userbox .user-name{
+.userbox .badge{
   max-width:240px;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -387,6 +388,7 @@ code{color:#0c59cf}
     justify-self:end;
   }
   .userbox .user-name{
+  .userbox .badge{
     display:none;
   }
   .profile-trigger{
@@ -435,6 +437,9 @@ code{color:#0c59cf}
   .picks-groups-grid{
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
+  .group-team-name{
+    font-size:12px;
+  }
   .footer{
     padding:0 10px 20px;
     font-size:12px;
@@ -445,6 +450,9 @@ code{color:#0c59cf}
   .picks-groups-grid{
     grid-template-columns:repeat(3,minmax(0,1fr));
   }
+  .match-duel,.match-card{grid-template-columns:1fr}
+  .topbar{padding:14px 14px;align-items:center;flex-direction:column}
+  .container{padding-top:16px}
 }
 
 .compact-tabs .tab{padding:7px 10px;font-size:12px}
