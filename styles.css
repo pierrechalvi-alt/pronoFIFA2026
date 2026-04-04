@@ -122,6 +122,11 @@ body{
   font-size:12px;
 }
 .userbox .user-name{
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .userbox .badge{
   max-width:240px;
   overflow:hidden;
