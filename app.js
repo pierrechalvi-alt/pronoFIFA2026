@@ -1220,6 +1220,7 @@ function renderPicksTable(userData, label, options = {}){
   return `
     <section>
       <h2>${escapeHtml(title)}</h2>
+      <small>Format compact : 4 colonnes × 3 groupes pour une lecture homogène.</small>
       <div class="groups-visual-grid picks-groups-grid">${groupBlocks}</div>
     </section>
     <div class="hr"></div>

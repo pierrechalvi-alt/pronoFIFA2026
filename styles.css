@@ -298,6 +298,7 @@ code{color:#0c59cf}
 .group-team-points{font-size:12px;color:#b8cfff}
 .picks-groups-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .pick-group-card .group-team-list{gap:8px}
+.pick-group-card .group-team-row{background:#f3f7ff}
 .pick-duel-row{
   display:grid;
   grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);
@@ -461,7 +462,7 @@ code{color:#0c59cf}
 
 @media (min-width: 761px) and (max-width: 1060px){
   .picks-groups-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
   .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
