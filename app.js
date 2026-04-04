@@ -777,24 +777,6 @@ function submitTieBreaker(){
   render();
 }
 
-function generateFlashGrid(){
-  const u = currentUser();
-  if (!u) return;
-  if (u.groupSubmittedAt || u.koSubmittedAt || u.finalSubmittedAt) {
-    alert("La grille flash est disponible uniquement avant les validations définitives.");
-    return;
-  }
-  if (!confirm("⚡ Générer une grille complète aléatoire ? Tu pourras ensuite l’ajuster match par match.")) return;
-
-  const picks = {};
-  for (const m of state.matches.groupStage || []) picks[String(m.id)] = randomPick(["H", "D", "A"]);
-  for (const m of state.matches.knockout || []) picks[String(m.id)] = randomPick(["H", "A"]);
-  u.picks = picks;
-  u.flashLockedAt = new Date().toISOString();
-  saveAll();
-  render();
-}
-
 function renderPlayerHub(){
   const rankings = computeLeaderboard();
   const liveRows = listLiveResults();
