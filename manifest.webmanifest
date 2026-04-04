@@ -1,0 +1,19 @@
+{
+  "name": "Pronos Coupe du Monde 2026",
+  "short_name": "Pronos 2026",
+  "description": "Application de pronostics Coupe du Monde 2026.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef3fb",
+  "theme_color": "#0c59cf",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,14 +1,4 @@
- :root{
-  --bg: #e7e7e7;
-  --bg-deep:#dcdcdc;
-  --card: #ffffff;
-  --card-strong: #ffffff;
-  --text: #111111;
-  --muted: #4b5563;
-  --line: #d6d6d6;
-  --line-strong: #bdbdbd;
-  --shadow: 0 6px 18px rgba(0,0,0,0.08);
-  --r: 8px;
+:root{
   --bg: #eef3fb;
   --bg-deep:#d9e6ff;
   --card: rgba(255,255,255,0.82);
@@ -30,8 +20,6 @@
 html,body{height:100%}
 body{
   margin:0;
-  font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
-  background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
   font-family: "Space Grotesk", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
   background:
     radial-gradient(1100px 500px at 0% -5%, rgba(18,184,134,.16), transparent 60%),
@@ -161,9 +149,6 @@ label{font-size:12px;color:var(--muted)}
 input, select, textarea{
   width:100%;
   padding:12px 12px;
-  border-radius:8px;
-  border:1px solid var(--line);
-  background: #fff;
   border-radius:14px;
   border:2px solid var(--line);
   background: rgba(255,255,255,.96);
