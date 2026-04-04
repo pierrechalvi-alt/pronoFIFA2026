@@ -512,9 +512,9 @@ function renderBracketFunnel(userData, allowEditing){
                     <span class="meta">vs</span>
                     <span>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
                   </div>
-                  <div class="picks picks-visual">
-                    <button class="pick ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>1</button>
-                    <button class="pick ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>2</button>
+                  <div class="picks picks-visual picks-labels">
+                    <button class="pick pick-label ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</button>
+                    <button class="pick pick-label ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</button>
                   </div>
                 </article>
               `;
@@ -661,22 +661,16 @@ function matchRow(m){
 
   return `
     <div class="match" data-matchid="${m.id}">
-      <div>
-        <div class="team">${escapeHtml(homeLabel)}</div>
-        <div class="meta">${escapeHtml(meta)}</div>
+      <div class="meta">${escapeHtml(meta)}</div>
+      <div class="match-duel">
+        <span class="team-chip">${getTeamFlag(homeLabel)} ${escapeHtml(homeLabel)}</span>
+        <span class="vs-chip">VS</span>
+        <span class="team-chip">${getTeamFlag(awayLabel)} ${escapeHtml(awayLabel)}</span>
       </div>
-
-      <div class="meta" style="text-align:center">vs</div>
-
-      <div style="text-align:right">
-        <div class="team">${escapeHtml(awayLabel)}</div>
-        <div class="meta">&nbsp;</div>
-      </div>
-
-      <div class="picks">
-        <button class="pick ${v==="H"?"active":""}" data-pick="H" title="Victoire équipe gauche" ${locked ? "disabled" : ""}>1</button>
-        ${isKO ? "" : `<button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>N</button>`}
-        <button class="pick ${v==="A"?"active":""}" data-pick="A" title="Victoire équipe droite" ${locked ? "disabled" : ""}>2</button>
+      <div class="picks picks-labels">
+        <button class="pick pick-label ${v==="H"?"active":""}" data-pick="H" title="Victoire ${escapeAttr(homeLabel)}" ${locked ? "disabled" : ""}>${getTeamFlag(homeLabel)} ${escapeHtml(homeLabel)}</button>
+        ${isKO ? "" : `<button class="pick pick-label ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>🤝 Nul</button>`}
+        <button class="pick pick-label ${v==="A"?"active":""}" data-pick="A" title="Victoire ${escapeAttr(awayLabel)}" ${locked ? "disabled" : ""}>${getTeamFlag(awayLabel)} ${escapeHtml(awayLabel)}</button>
       </div>
     </div>
   `;
@@ -1243,6 +1237,22 @@ function inferPredictedWinner(userData){
 
 function randomPick(options){
   return options[Math.floor(Math.random() * options.length)];
+}
+
+function generateFlashGrid(){
+  const u = currentUser();
+  const allMatches = [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])];
+  if (!allMatches.length) {
+    alert("Aucun match disponible pour générer une grille flash.");
+    return;
+  }
+  for (const match of allMatches){
+    const options = match.stage === "GROUP" ? ["H", "D", "A"] : ["H", "A"];
+    u.picks[String(match.id)] = randomPick(options);
+  }
+  u.flashLockedAt = new Date().toISOString();
+  saveAll();
+  render();
 }
 
 function isFlashLocked(userData){
