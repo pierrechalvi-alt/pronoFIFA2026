@@ -250,13 +250,6 @@ function renderWelcome(){
           <label>Mot de passe</label>
           <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
         </div>
-        <div class="field">
-          <label>Équipe favorite (optionnel)</label>
-          <select id="favoriteTeam">
-            <option value="">— Choisir —</option>
-            ${Object.values(state.teams?.teamsByGroup || {}).flat().map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
-          </select>
-        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="authBtn">Entrer dans le tournoi</button>
@@ -268,9 +261,8 @@ function renderWelcome(){
     const firstName = document.getElementById("firstName").value.trim();
     const lastName  = document.getElementById("lastName").value.trim();
     const password = document.getElementById("password").value;
-    const favoriteTeam = document.getElementById("favoriteTeam").value || "";
     if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
-    const profile = { firstName, lastName, nickname: "", favoriteTeam };
+    const profile = { firstName, lastName, nickname: "" };
     const key = userKey(profile);
     const existing = state.data.users?.[key];
     if (existing) {
@@ -317,6 +309,9 @@ function renderPredictionJourney(){
       <h2>1) Phase de groupes</h2>
       <p>Pronostique d'abord chaque match de poule, puis continue vers les phases finales.</p>
       ${renderOverview()}
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="flashGridBtn">⚡ J’ai la flemme, je lance une grille flash</button>
+      </div>
       <div class="hr"></div>
       ${renderGroups()}
       <div class="row" style="margin-top:12px">
@@ -500,7 +495,7 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th><th>Pronos</th><th>Complétion</th></tr>
+          <tr><th>Rang</th><th>Joueur</th><th>Vainqueur pronostiqué</th><th>Pronos</th><th>Complétion</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
@@ -640,6 +635,8 @@ function wireMatchButtons(){
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
   const submitGroupsBtn = document.getElementById("submitGroupsBtn");
   if (submitGroupsBtn) submitGroupsBtn.onclick = () => submitGroupStage();
+  const flashGridBtn = document.getElementById("flashGridBtn");
+  if (flashGridBtn) flashGridBtn.onclick = () => generateFlashGrid();
   const submitQualifiersBtn = document.getElementById("submitQualifiersBtn");
   if (submitQualifiersBtn) submitQualifiersBtn.onclick = () => submitQualifiersStage();
   const submitKOBtn = document.getElementById("submitKOBtn");
@@ -717,7 +714,24 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "matches";
+  state.hubTab = "leaderboard";
+  saveAll();
+  render();
+}
+
+function generateFlashGrid(){
+  const u = currentUser();
+  if (!u) return;
+  if (u.groupSubmittedAt || u.koSubmittedAt || u.finalSubmittedAt) {
+    alert("La grille flash est disponible uniquement avant les validations définitives.");
+    return;
+  }
+  if (!confirm("⚡ Générer une grille complète aléatoire ? Tu pourras ensuite l’ajuster match par match.")) return;
+
+  const picks = {};
+  for (const m of state.matches.groupStage || []) picks[String(m.id)] = randomPick(["H", "D", "A"]);
+  for (const m of state.matches.knockout || []) picks[String(m.id)] = randomPick(["H", "A"]);
+  u.picks = picks;
   saveAll();
   render();
 }
@@ -1121,7 +1135,7 @@ function computeLeaderboard(){
     .map(([key, u]) => ({
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
-      favoriteTeam: u.profile.favoriteTeam || inferPredictedWinner(u),
+      favoriteTeam: inferPredictedWinner(u),
       done: Object.keys(u.picks || {}).length,
       total
     }))
@@ -1136,6 +1150,10 @@ function inferPredictedWinner(userData){
   if (pick === "H") return teams.homeLabel;
   if (pick === "A") return teams.awayLabel;
   return "";
+}
+
+function randomPick(options){
+  return options[Math.floor(Math.random() * options.length)];
 }
 
 function computeTodayMatchStats(){
