@@ -5,6 +5,11 @@ const LS_KEY = "fwc26_pronos_v1";
 const DB_NAME = "fwc26_pronos_db";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
+const memoryStorage = { value: null };
+let matchLifecycleInterval = null;
+const CLIENT_ID = `client_${Math.random().toString(36).slice(2, 9)}`;
+const SYNC_CHANNEL_NAME = "fwc26_sync";
+let syncChannel = null;
 
 const state = {
   me: null,
@@ -31,10 +36,14 @@ function registerServiceWorker(){
 }
 
 async function init(){
+  if (!APP || !USERBOX) {
+    console.error("Impossible d'initialiser l'application : éléments racine introuvables.");
+    return;
+  }
   try {
     const [teams, matches] = await Promise.all([
-      fetch("./data/teams.json").then(r=>r.json()),
-      fetch("./data/matches.json").then(r=>r.json())
+      fetchJson("./data/teams.json"),
+      fetchJson("./data/matches.json")
     ]);
     state.teams = teams;
     state.matches = normalizeMatches(matches, teams);
@@ -51,6 +60,8 @@ async function init(){
 
   await hydrateDataStore();
   requestPersistentStorage();
+  setupRealtimeSync();
+  startMatchLifecycleMonitor();
 
   if (state.data?.lastUserKey) {
     const u = state.data.users?.[state.data.lastUserKey];
@@ -61,6 +72,14 @@ async function init(){
   }
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
+}
+
+async function fetchJson(url){
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Erreur HTTP ${response.status} sur ${url}`);
+  }
+  return response.json();
 }
 
 function normalizeMatches(m, teams){
@@ -176,7 +195,8 @@ function userKey(profile){
 function loadAll(){
   const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
-    const parsed = JSON.parse(localStorage.getItem(LS_KEY)) || fallback;
+    const raw = readStorageItem(LS_KEY);
+    const parsed = raw ? JSON.parse(raw) : fallback;
     return normalizeDataShape(parsed);
   }
   catch { return fallback; }
@@ -186,27 +206,154 @@ function normalizeDataShape(raw){
   if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
     parsed.thirdHalf = { comments:[] };
   }
+  parsed.thirdHalf.comments = parsed.thirdHalf.comments.map((comment) => ({
+    ...comment,
+    replies: Array.isArray(comment.replies) ? comment.replies : []
+  }));
   if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
   if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  if (!parsed.notifications || typeof parsed.notifications !== "object") {
+    parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
+  }
+  if (!Array.isArray(parsed.notifications.feed)) parsed.notifications.feed = [];
+  if (!Number.isFinite(Number(parsed.notifications.unreadCount))) parsed.notifications.unreadCount = 0;
+  if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
+    parsed.notifications.delivered = {};
+  }
   return parsed;
 }
 
 async function hydrateDataStore(){
   const localData = normalizeDataShape(state.data);
   const indexedData = await loadAllFromIndexedDB();
-  if (!indexedData) {
-    state.data = localData;
-    return;
-  }
-  const pickIndexed = Number(indexedData.updatedAt || 0) > Number(localData.updatedAt || 0);
-  state.data = pickIndexed ? indexedData : localData;
-  if (pickIndexed) saveAll();
+  state.data = mergeSnapshots(localData, indexedData || {});
+  persistSnapshot(false);
 }
 
 function saveAll(){
   state.data.updatedAt = Date.now();
-  localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+  persistSnapshot(true);
+}
+
+function persistSnapshot(announce){
+  writeStorageItem(LS_KEY, JSON.stringify(state.data));
   saveAllToIndexedDB(state.data);
+  if (announce) broadcastSnapshot();
+}
+
+function readStorageItem(key){
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStorage.value;
+  }
+}
+
+function writeStorageItem(key, value){
+  memoryStorage.value = value;
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
+function setupRealtimeSync(){
+  window.addEventListener("storage", (event) => {
+    if (event.key !== LS_KEY || !event.newValue) return;
+    try {
+      integrateIncomingData(JSON.parse(event.newValue), "storage");
+    } catch {}
+  });
+  if ("BroadcastChannel" in window) {
+    syncChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+    syncChannel.onmessage = (event) => {
+      const payload = event.data;
+      if (!payload || payload.clientId === CLIENT_ID) return;
+      integrateIncomingData(payload.snapshot, "broadcast");
+    };
+  }
+  setInterval(async () => {
+    const indexed = await loadAllFromIndexedDB();
+    if (indexed) integrateIncomingData(indexed, "indexeddb");
+  }, 12000);
+}
+
+function broadcastSnapshot(){
+  if (!syncChannel) return;
+  syncChannel.postMessage({
+    clientId: CLIENT_ID,
+    updatedAt: Date.now(),
+    snapshot: state.data
+  });
+}
+
+function integrateIncomingData(incomingRaw, source){
+  const incoming = normalizeDataShape(incomingRaw);
+  const merged = mergeSnapshots(state.data, incoming);
+  if (JSON.stringify(merged) === JSON.stringify(state.data)) return;
+  state.data = merged;
+  persistSnapshot(false);
+  if (state.me) render();
+}
+
+function mergeSnapshots(baseRaw, incomingRaw){
+  const base = normalizeDataShape(baseRaw);
+  const incoming = normalizeDataShape(incomingRaw);
+  const mergedUsers = { ...base.users };
+
+  for (const [key, incomingUser] of Object.entries(incoming.users || {})){
+    const existingUser = mergedUsers[key];
+    if (!existingUser) {
+      mergedUsers[key] = incomingUser;
+      continue;
+    }
+    mergedUsers[key] = {
+      ...existingUser,
+      ...incomingUser,
+      profile: incomingUser.profile || existingUser.profile,
+      picks: { ...(existingUser.picks || {}), ...(incomingUser.picks || {}) },
+      qualifiers: { ...(existingUser.qualifiers || {}), ...(incomingUser.qualifiers || {}) }
+    };
+  }
+
+  const commentMap = new Map();
+  for (const comment of [...(base.thirdHalf?.comments || []), ...(incoming.thirdHalf?.comments || [])]){
+    const existing = commentMap.get(comment.id);
+    if (!existing) {
+      commentMap.set(comment.id, { ...comment, replies: Array.isArray(comment.replies) ? comment.replies : [] });
+      continue;
+    }
+    const repliesMap = new Map();
+    for (const reply of [...(existing.replies || []), ...((comment.replies || []))]){
+      repliesMap.set(reply.id, reply);
+    }
+    commentMap.set(comment.id, {
+      ...existing,
+      ...comment,
+      likes: { ...(existing.likes || {}), ...(comment.likes || {}) },
+      replies: [...repliesMap.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    });
+  }
+
+  const notifMap = new Map();
+  for (const notification of [...(base.notifications?.feed || []), ...(incoming.notifications?.feed || [])]){
+    notifMap.set(notification.id, notification);
+  }
+
+  return normalizeDataShape({
+    ...base,
+    ...incoming,
+    users: mergedUsers,
+    thirdHalf: {
+      comments: [...commentMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    },
+    notifications: {
+      feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
+      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
+    },
+    lastUserKey: incoming.lastUserKey || base.lastUserKey,
+    updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+  });
 }
 
 function openPronosDb(){
@@ -356,6 +503,9 @@ function render(){
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
          <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
+       <button class="btn alt notification-btn" id="notificationBtn" title="Notifications">
+         🔔 ${state.data.notifications?.unreadCount ? `<span class="notif-dot">${state.data.notifications.unreadCount}</span>` : ""}
+       </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
     : `<div style="display:flex; justify-content:center; width:100%"><span class="badge">Non connecté</span></div>`;
@@ -366,10 +516,12 @@ function render(){
       if (b) b.onclick = logout;
       const trigger = document.getElementById("profileTrigger");
       const avatarInput = document.getElementById("avatarInput");
+      const notificationBtn = document.getElementById("notificationBtn");
       if (trigger && avatarInput) {
         trigger.onclick = () => avatarInput.click();
         avatarInput.onchange = (e) => handleAvatarUpload(e.target.files?.[0]);
       }
+      if (notificationBtn) notificationBtn.onclick = () => openNotificationsCenter();
     });
   }
 
@@ -442,6 +594,11 @@ function renderWelcome(){
     if (existing) return alert("Ce compte existe déjà. Utilise “J'y retourne” pour te reconnecter.");
     setUser(profile);
     state.data.users[key].password = password;
+    pushAppNotification({
+      type: "player_signup",
+      title: "Nouveau joueur inscrit",
+      body: `${firstName} ${lastName} a rejoint les pronostics.`
+    });
     saveAll();
     render();
   };
@@ -823,6 +980,7 @@ function renderThirdHalfComment(comment){
   const me = state.me ? userKey(state.me) : "";
   const likes = Object.keys(comment.likes || {}).length;
   const liked = Boolean(comment.likes?.[me]);
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
   const date = new Date(comment.createdAt);
   const displayDate = Number.isNaN(date.getTime()) ? "Date inconnue" : date.toLocaleString("fr-FR");
   return `
@@ -836,6 +994,20 @@ function renderThirdHalfComment(comment){
       <div class="row" style="margin-top:8px">
         <button class="btn alt" data-like-comment="${escapeAttr(comment.id)}">${liked ? "💙 Je n'aime plus" : "👍 J'aime"}</button>
         <span class="badge">${likes} like${likes > 1 ? "s" : ""}</span>
+      </div>
+      <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:8px">
+        <div class="meta" style="text-align:left">Commentaires (${replies.length})</div>
+        ${replies.length ? replies.map((reply) => `
+          <div class="reply-item">
+            <b>${escapeHtml(reply.authorLabel || "Invité")}</b>
+            <span class="meta">${escapeHtml(formatDate(reply.createdAt))}</span>
+            <div>${escapeHtml(reply.text || "")}</div>
+          </div>
+        `).join("") : `<small>Aucun commentaire pour ce post.</small>`}
+        <div class="row" style="margin-top:8px">
+          <input type="text" data-reply-input="${escapeAttr(comment.id)}" placeholder="Répondre à ce post…" />
+          <button class="btn alt" data-reply-comment="${escapeAttr(comment.id)}">Commenter</button>
+        </div>
       </div>
     </article>
   `;
@@ -880,18 +1052,19 @@ function handleAvatarUpload(file){
     alert("Merci de choisir un fichier image.");
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const u = currentUser();
-    if (!u) return;
-    const dataUrl = String(reader.result || "");
-    u.profilePhoto = dataUrl;
-    if (u.profile) u.profile.profilePhoto = dataUrl;
-    if (state.me) state.me.profilePhoto = dataUrl;
-    saveAll();
-    render();
-  };
-  reader.readAsDataURL(file);
+  readImageAsDataUrl(file, { maxWidth: 512, quality: 0.85 })
+    .then((dataUrl) => {
+      const u = currentUser();
+      if (!u) return;
+      u.profilePhoto = dataUrl;
+      if (u.profile) u.profile.profilePhoto = dataUrl;
+      if (state.me) state.me.profilePhoto = dataUrl;
+      saveAll();
+      render();
+    })
+    .catch(() => {
+      alert("Impossible de traiter la photo de profil.");
+    });
 }
 
 function renderAvatar(photoDataUrl, alt){
@@ -1082,7 +1255,13 @@ function submitThirdHalfComment(){
       text,
       photoDataUrl,
       createdAt: new Date().toISOString(),
-      likes: {}
+      likes: {},
+      replies: []
+    });
+    pushAppNotification({
+      type: "bistro_post",
+      title: "Nouveau message au Bistro",
+      body: `${me.profile.firstName} a publié : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
     });
     saveAll();
     render();
@@ -1092,9 +1271,9 @@ function submitThirdHalfComment(){
     alert("Merci de sélectionner une image valide.");
     return;
   }
-  const reader = new FileReader();
-  reader.onload = () => publish(String(reader.result || ""));
-  reader.readAsDataURL(file);
+  readImageAsDataUrl(file, { maxWidth: 1200, quality: 0.82 })
+    .then((photo) => publish(photo))
+    .catch(() => alert("Impossible de lire cette image. Essaie un autre fichier."));
 }
 
 function toggleCommentLike(commentId){
@@ -1108,6 +1287,30 @@ function toggleCommentLike(commentId){
   if (!comment.likes) comment.likes = {};
   if (comment.likes[key]) delete comment.likes[key];
   else comment.likes[key] = true;
+  saveAll();
+  render();
+}
+
+function submitThirdHalfReply(commentId){
+  const me = currentUser();
+  if (!me?.profile || !commentId) return;
+  const input = document.querySelector(`[data-reply-input="${commentId}"]`);
+  const text = String(input?.value || "").trim();
+  if (!text) {
+    alert("Écris un commentaire avant de répondre.");
+    return;
+  }
+  const comments = state.data.thirdHalf?.comments;
+  const comment = comments?.find((entry) => entry.id === commentId);
+  if (!comment) return;
+  if (!Array.isArray(comment.replies)) comment.replies = [];
+  comment.replies.push({
+    id: `r_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    userKey: userKey(me.profile),
+    authorLabel: `${me.profile.firstName} ${me.profile.lastName}`,
+    text,
+    createdAt: new Date().toISOString()
+  });
   saveAll();
   render();
 }
@@ -1663,6 +1866,9 @@ function wireHubControls(){
   for (const btn of document.querySelectorAll("[data-like-comment]")){
     btn.onclick = () => toggleCommentLike(btn.dataset.likeComment);
   }
+  for (const btn of document.querySelectorAll("[data-reply-comment]")){
+    btn.onclick = () => submitThirdHalfReply(btn.dataset.replyComment);
+  }
 }
 
 function listLiveResults(){
@@ -1857,6 +2063,155 @@ function roundLabel(r){
   if (!r) return null;
   const map = { R32:"Seizièmes", R16:"Huitièmes", QF:"Quarts", SF:"Demies", BRONZE:"Bronze", FINAL:"Finale" };
   return map[r] || r;
+}
+
+function formatDate(value){
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Date inconnue" : date.toLocaleString("fr-FR");
+}
+
+async function readImageAsDataUrl(file, options = {}){
+  const rawDataUrl = await fileToDataUrl(file);
+  const maxWidth = Number(options.maxWidth || 0);
+  if (!maxWidth || typeof document === "undefined") return rawDataUrl;
+  return resizeDataUrl(rawDataUrl, maxWidth, Number(options.quality || 0.85));
+}
+
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Lecture impossible"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function resizeDataUrl(dataUrl, maxWidth, quality){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (!img.width || img.width <= maxWidth) return resolve(dataUrl);
+      const ratio = maxWidth / img.width;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(dataUrl);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", Math.min(Math.max(quality || 0.85, 0.5), 0.95)));
+    };
+    img.onerror = () => reject(new Error("Image invalide"));
+    img.src = dataUrl;
+  });
+}
+
+function pushAppNotification({ type, title, body, uniqueKey }){
+  if (!state.data.notifications) {
+    state.data.notifications = { feed: [], unreadCount: 0, delivered: {} };
+  }
+  if (uniqueKey) {
+    if (state.data.notifications.delivered[uniqueKey]) return false;
+    state.data.notifications.delivered[uniqueKey] = new Date().toISOString();
+  }
+  state.data.notifications.feed.unshift({
+    id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    type: type || "generic",
+    title: title || "Notification",
+    body: body || "",
+    createdAt: new Date().toISOString()
+  });
+  state.data.notifications.feed = state.data.notifications.feed.slice(0, 50);
+  state.data.notifications.unreadCount = Math.min(99, Number(state.data.notifications.unreadCount || 0) + 1);
+  showToast(`${title || "Notification"} — ${body || ""}`.trim());
+  sendBrowserNotification(title || "Notification", body || "");
+  return true;
+}
+
+function showToast(message){
+  const existing = document.getElementById("appToast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "appToast";
+  toast.className = "app-toast";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add("show"), 10);
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 250);
+  }, 4200);
+}
+
+function sendBrowserNotification(title, body){
+  if (typeof Notification === "undefined") return;
+  try {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+      return;
+    }
+    if (Notification.permission === "default") {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") new Notification(title, { body });
+      }).catch(() => {});
+    }
+  } catch {}
+}
+
+function openNotificationsCenter(){
+  const feed = state.data.notifications?.feed || [];
+  if (!feed.length) {
+    alert("Aucune notification pour le moment.");
+  } else {
+    const preview = feed.slice(0, 12)
+      .map((item) => `• ${item.title} — ${item.body} (${formatDate(item.createdAt)})`)
+      .join("\n");
+    alert(`Notifications récentes:\n\n${preview}`);
+  }
+  if (state.data.notifications) state.data.notifications.unreadCount = 0;
+  saveAll();
+  render();
+}
+
+function startMatchLifecycleMonitor(){
+  if (matchLifecycleInterval) clearInterval(matchLifecycleInterval);
+  checkMatchLifecycleNotifications();
+  matchLifecycleInterval = setInterval(checkMatchLifecycleNotifications, 60000);
+}
+
+function checkMatchLifecycleNotifications(){
+  const allMatches = [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])];
+  let changed = false;
+  for (const match of allMatches){
+    const kickoff = getMatchKickoffDate(match);
+    const labels = getMatchDisplayTeams(currentUser() || { picks:{} }, match);
+    if (kickoff && new Date() >= kickoff){
+      changed = pushAppNotification({
+        type: "match_start",
+        title: "Début de match",
+        body: `${labels.homeLabel} vs ${labels.awayLabel} commence maintenant.`,
+        uniqueKey: `match_start_${match.id}`
+      }) || changed;
+    }
+    if (Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)){
+      changed = pushAppNotification({
+        type: "match_end",
+        title: "Fin de match",
+        body: `${labels.homeLabel} ${match.scoreHome}-${match.scoreAway} ${labels.awayLabel}.`,
+        uniqueKey: `match_end_${match.id}_${match.scoreHome}_${match.scoreAway}`
+      }) || changed;
+    }
+  }
+  if (changed) {
+    saveAll();
+    render();
+  }
+}
+
+function getMatchKickoffDate(match){
+  if (!match?.date) return null;
+  const raw = `${match.date}T${match.time || "00:00"}:00`;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /* ---------- Counters & escaping ---------- */
