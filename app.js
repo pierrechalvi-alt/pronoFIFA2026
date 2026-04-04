@@ -156,7 +156,8 @@ function ensureUser(){
       qualifiersSubmittedAt: null,
       koSubmittedAt: null,
       finalSubmittedAt: null,
-      tieBreakerSubmittedAt: null
+      tieBreakerSubmittedAt: null,
+      flashLockedAt: null
     };
   }
   state.data.lastUserKey = key;
@@ -186,6 +187,10 @@ function pick(matchId, val){
   const u = currentUser();
   const match = getMatchById(matchId);
   if (!match) return;
+  if (isFlashLocked(u)) {
+    alert("Ta grille flash est verrouillée : relance un flash pour regénérer automatiquement.");
+    return;
+  }
   if (match.stage === "GROUP" && u.groupSubmittedAt) return;
   if (match.stage === "KO" && u.koSubmittedAt) return;
   if (match?.stage === "KO" && val === "D") {
@@ -250,13 +255,6 @@ function renderWelcome(){
           <label>Mot de passe</label>
           <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
         </div>
-        <div class="field">
-          <label>Équipe favorite (optionnel)</label>
-          <select id="favoriteTeam">
-            <option value="">— Choisir —</option>
-            ${Object.values(state.teams?.teamsByGroup || {}).flat().map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
-          </select>
-        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="authBtn">Entrer dans le tournoi</button>
@@ -268,9 +266,8 @@ function renderWelcome(){
     const firstName = document.getElementById("firstName").value.trim();
     const lastName  = document.getElementById("lastName").value.trim();
     const password = document.getElementById("password").value;
-    const favoriteTeam = document.getElementById("favoriteTeam").value || "";
     if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
-    const profile = { firstName, lastName, nickname: "", favoriteTeam };
+    const profile = { firstName, lastName, nickname: "" };
     const key = userKey(profile);
     const existing = state.data.users?.[key];
     if (existing) {
@@ -305,6 +302,7 @@ function renderPredictionJourney(){
   const groupDone = countPicksByStage(u, "GROUP");
   const koTotal = state.matches.knockout.length;
   const koDone = countPicksByStage(u, "KO");
+  const flashLocked = isFlashLocked(u);
 
   return `
     <section class="card">
@@ -317,6 +315,10 @@ function renderPredictionJourney(){
       <h2>1) Phase de groupes</h2>
       <p>Pronostique d'abord chaque match de poule, puis continue vers les phases finales.</p>
       ${renderOverview()}
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="flashGridBtn">${flashLocked ? "⚡ Relancer une grille flash" : "⚡ J’ai la flemme, je lance une grille flash"}</button>
+      </div>
+      ${flashLocked ? `<small>Grille flash active : les choix manuels sont verrouillés. Tu peux relancer un flash autant de fois que tu veux avant validation.</small>` : ""}
       <div class="hr"></div>
       ${renderGroups()}
       <div class="row" style="margin-top:12px">
@@ -466,6 +468,57 @@ function renderKO(){
   `;
 }
 
+function renderBracketFunnel(userData, allowEditing){
+  const rounds = ["R32", "R16", "QF", "SF", "BRONZE", "FINAL"];
+  const labels = {
+    R32: "Seizièmes",
+    R16: "Huitièmes",
+    QF: "Quarts",
+    SF: "Demi-finales",
+    BRONZE: "Petite finale",
+    FINAL: "Finale"
+  };
+  const globalLocked = isFlashLocked(userData) || userData.finalSubmittedAt;
+  const ko = (state.matches.knockout || []).slice().sort((a, b) => a.id - b.id);
+  if (!ko.length) return `<p><small>Aucun match KO listé.</small></p>`;
+
+  return `
+    <div class="bracket-funnel">
+      ${rounds.map((round) => {
+        const matches = ko.filter((m) => m.round === round);
+        if (!matches.length) return "";
+        return `
+          <section class="funnel-round">
+            <h3>${labels[round] || round}</h3>
+            ${matches.map((m) => {
+              const pickValue = userData.picks?.[String(m.id)] || "";
+              const teams = getMatchDisplayTeams(userData, m);
+              const disablePicks = !allowEditing || globalLocked;
+              return `
+                <article class="funnel-match" data-matchid="${m.id}">
+                  <div class="row" style="justify-content:space-between">
+                    <b>${escapeHtml(roundLabel(m.round) || round)} • Match ${m.id}</b>
+                    <span class="meta">${escapeHtml([m.date, m.time, m.city].filter(Boolean).join(" • ") || "Date à confirmer")}</span>
+                  </div>
+                  <div class="row" style="justify-content:space-between">
+                    <span>${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
+                    <span class="meta">vs</span>
+                    <span>${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
+                  </div>
+                  <div class="picks picks-visual">
+                    <button class="pick ${pickValue==="H"?"active":""}" data-pick="H" ${disablePicks ? "disabled" : ""}>1</button>
+                    <button class="pick ${pickValue==="A"?"active":""}" data-pick="A" ${disablePicks ? "disabled" : ""}>2</button>
+                  </div>
+                </article>
+              `;
+            }).join("")}
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderRecap(){
   const u = currentUser();
   const total = countTotalMatches();
@@ -500,7 +553,7 @@ function renderLeaderboardView(){
     <div class="leaderboard-card">
       <table class="leaderboard-table">
         <thead>
-          <tr><th>Rang</th><th>Joueur</th><th>Équipe favorite</th><th>Pronos</th><th>Complétion</th></tr>
+          <tr><th>Rang</th><th>Joueur</th><th>Vainqueur pronostiqué</th><th>Pronos</th><th>Complétion</th></tr>
         </thead>
         <tbody>
           ${rankings.map((r, idx) => `
@@ -585,7 +638,7 @@ function renderTournamentMatchesCenter(){
 function matchRow(m){
   const u = currentUser();
   const v = u.picks[String(m.id)] || "";
-  const locked = Boolean(u.finalSubmittedAt);
+  const locked = Boolean(u.finalSubmittedAt || isFlashLocked(u));
   const { homeLabel, awayLabel } = getMatchDisplayTeams(u, m);
   const isKO = m.stage === "KO";
 
@@ -640,6 +693,8 @@ function wireMatchButtons(){
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
   const submitGroupsBtn = document.getElementById("submitGroupsBtn");
   if (submitGroupsBtn) submitGroupsBtn.onclick = () => submitGroupStage();
+  const flashGridBtn = document.getElementById("flashGridBtn");
+  if (flashGridBtn) flashGridBtn.onclick = () => generateFlashGrid();
   const submitQualifiersBtn = document.getElementById("submitQualifiersBtn");
   if (submitQualifiersBtn) submitQualifiersBtn.onclick = () => submitQualifiersStage();
   const submitKOBtn = document.getElementById("submitKOBtn");
@@ -1121,7 +1176,7 @@ function computeLeaderboard(){
     .map(([key, u]) => ({
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
-      favoriteTeam: u.profile.favoriteTeam || inferPredictedWinner(u),
+      favoriteTeam: inferPredictedWinner(u),
       done: Object.keys(u.picks || {}).length,
       total
     }))
@@ -1136,6 +1191,14 @@ function inferPredictedWinner(userData){
   if (pick === "H") return teams.homeLabel;
   if (pick === "A") return teams.awayLabel;
   return "";
+}
+
+function randomPick(options){
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function isFlashLocked(userData){
+  return Boolean(userData?.flashLockedAt && !userData?.finalSubmittedAt);
 }
 
 function computeTodayMatchStats(){
