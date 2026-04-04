@@ -460,28 +460,10 @@ function renderQualifs(){
 function renderKO(){
   const ko = state.matches.knockout || [];
   if (!ko.length) return `<p><small>Aucun match KO listé.</small></p>`;
-
-  const rounds = [
-    { key:"R32", title:"Seizièmes de finale (Round of 32)" },
-    { key:"R16", title:"Huitièmes de finale" },
-    { key:"QF",  title:"Quarts de finale" },
-    { key:"SF",  title:"Demi-finales" },
-    { key:"BRONZE", title:"Finale de bronze" },
-    { key:"FINAL", title:"Finale" }
-  ];
-
-  let html = `<p>Tableau final alimenté automatiquement par tes pronostics. Choisis le qualifié pour chaque match.</p>`;
-
-  for (const r of rounds){
-    const ms = filterMatches(ko.filter(m => m.round === r.key));
-    if (!ms.length) continue;
-    html += `<div class="hr"></div><h2>${r.title}</h2>`;
-    for (const m of ms) html += matchRow(m);
-  }
-  if (!html.includes("<h2>")) {
-    return `<p><small>Aucun match KO ne correspond aux filtres en cours.</small></p>`;
-  }
-  return html;
+  return `
+    <p>Tableau final face-à-face (entonnoir). Choisis le qualifié de chaque duel.</p>
+    ${renderBracketFunnel(currentUser(), true)}
+  `;
 }
 
 function renderRecap(){
@@ -536,7 +518,7 @@ function renderLeaderboardView(){
     ${selectedUser ? `
       <div class="hr"></div>
       <h2>Vue d’ensemble de ${escapeHtml(selectedUser.profile.firstName)} ${escapeHtml(selectedUser.profile.lastName)}</h2>
-      ${renderBracketTable(selectedUser)}
+      ${renderBracketFunnel(selectedUser, false)}
     ` : ""}
   `;
 }
@@ -647,6 +629,12 @@ function wireMatchButtons(){
       b.onclick = () => pick(id, b.dataset.pick);
     }
   }
+  for (const el of document.querySelectorAll(".funnel-match")){
+    const id = Number(el.dataset.matchid);
+    for (const b of el.querySelectorAll(".pick")){
+      b.onclick = () => pick(id, b.dataset.pick);
+    }
+  }
 
   const finalBtn = document.getElementById("finalBtn");
   if (finalBtn) finalBtn.onclick = () => submitFinalPicks();
@@ -729,7 +717,7 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "leaderboard";
+  state.hubTab = "matches";
   saveAll();
   render();
 }
@@ -845,8 +833,9 @@ function renderPicksTable(userData, label){
 
 function getSelectedLeaderboardUser(){
   const users = state.data.users || {};
-  if (!state.selectedLeaderboardUserKey || !users[state.selectedLeaderboardUserKey]) {
-    const firstKey = Object.keys(users)[0] || null;
+  const rankingKeys = computeLeaderboard().map((r) => r.key);
+  if (!state.selectedLeaderboardUserKey || !rankingKeys.includes(state.selectedLeaderboardUserKey)) {
+    const firstKey = rankingKeys[0] || null;
     state.selectedLeaderboardUserKey = firstKey;
   }
   return state.selectedLeaderboardUserKey ? users[state.selectedLeaderboardUserKey] : null;
@@ -1128,7 +1117,7 @@ function computeLeaderboard(){
   const users = Object.entries(state.data.users || {});
   const total = countTotalMatches();
   return users
-    .filter(([, u]) => u?.profile)
+    .filter(([, u]) => u?.profile && countPicks(u) === total && u.tieBreakerSubmittedAt)
     .map(([key, u]) => ({
       key,
       label: `${u.profile.firstName} ${u.profile.lastName}${u.profile.nickname ? ` (${u.profile.nickname})` : ""}`,
