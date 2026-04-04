@@ -7,7 +7,7 @@ const LS_KEY = "fwc26_pronos_v1";
 const state = {
   me: null,
   onboardingStep: "welcome", // welcome | profile | app
-  view: "groups", // groups | qualifs | ko | recap | community
+  view: "groups", // groups | qualifs | ko | recap
   hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
@@ -530,7 +530,10 @@ function renderRecap(){
     ` : `
       <p><b>✅ Envoi définitif effectué.</b> ${u.tieBreakerSubmittedAt ? "Merci, ton dossier est complet !" : "Il te reste la réponse subsidiaire à envoyer en haut de page."}</p>
     `}
-    <p><small>Après validation finale, ta grille est figée et conservée pour le classement.</small></p>
+    <div class="row" style="margin-top:10px">
+      <button class="btn danger" id="resetBtn">Tout effacer (panique)</button>
+    </div>
+    ${u.tieBreakerSubmittedAt ? renderPlayerHub() : ""}
   `;
 }
 
@@ -567,10 +570,10 @@ function matchRow(m){
         <div class="meta">&nbsp;</div>
       </div>
 
-      <div class="picks picks-visual">
-        <button class="pick pick-label ${v==="H"?"active":""}" data-pick="H" title="Victoire ${escapeAttr(homeLabel)}" ${locked ? "disabled" : ""}>${escapeHtml(homeLabel)}</button>
-        ${isKO ? "" : `<button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>Match nul</button>`}
-        <button class="pick pick-label ${v==="A"?"active":""}" data-pick="A" title="Victoire ${escapeAttr(awayLabel)}" ${locked ? "disabled" : ""}>${escapeHtml(awayLabel)}</button>
+      <div class="picks">
+        <button class="pick ${v==="H"?"active":""}" data-pick="H" title="Victoire équipe gauche" ${locked ? "disabled" : ""}>1</button>
+        ${isKO ? "" : `<button class="pick ${v==="D"?"active":""}" data-pick="D" title="Match nul" ${locked ? "disabled" : ""}>N</button>`}
+        <button class="pick ${v==="A"?"active":""}" data-pick="A" title="Victoire équipe droite" ${locked ? "disabled" : ""}>2</button>
       </div>
     </div>
   `;
@@ -640,7 +643,7 @@ function renderPlayerHub(){
   return `
     <div class="hr"></div>
     <h2>Merci pour ta participation 🙌</h2>
-    <p>Espace public des pronostics : à gauche les résultats/calendrier, à droite toutes les grilles des joueurs via un classement interactif.</p>
+    <p>Ton profil est créé. À gauche : résultats + calendrier. À droite : classement interactif, ton tableau de pronos, et statistiques de la communauté.</p>
     <div class="hub-layout" style="margin-top:10px">
       <section class="card" style="padding:12px">
         <h2>Résultats & calendrier</h2>
@@ -747,7 +750,7 @@ function getSelectedLeaderboardUser(){
 }
 
 function computeCommunityStats(){
-  const users = Object.values(state.data.users || {}).filter((u) => u?.picks && Object.keys(u.picks || {}).length);
+  const users = Object.values(state.data.users || {}).filter((u) => u?.picks && u.tieBreakerSubmittedAt);
   const total = users.length;
   if (!total) return [];
 
@@ -785,37 +788,10 @@ function getMatchDisplayTeams(userData, match){
   if (match.stage !== "KO") {
     return { homeLabel: match.home || "À définir", awayLabel: match.away || "À définir" };
   }
-  const homeResolved = resolveKnockoutSlot(match.homeLabel, userData);
-  const awayResolved = resolveKnockoutSlot(match.awayLabel, userData);
-  if (match.round === "R32") {
-    return {
-      homeLabel: isKnockoutPlaceholder(homeResolved) ? getR32TeamFromQualifiers(userData, match.id, true, homeResolved) : homeResolved,
-      awayLabel: isKnockoutPlaceholder(awayResolved) ? getR32TeamFromQualifiers(userData, match.id, false, awayResolved) : awayResolved
-    };
-  }
-  return { homeLabel: homeResolved, awayLabel: awayResolved };
-}
-
-function isKnockoutPlaceholder(label){
-  const value = String(label || "").toLowerCase();
-  return value.includes("qualifié") || value.includes("a definir") || value.includes("à définir");
-}
-
-function getR32TeamFromQualifiers(userData, matchId, isHome, fallback){
-  const qualifiers = getQualifiedTeams(userData);
-  const slotIndex = (Number(matchId) - 73) * 2 + (isHome ? 0 : 1);
-  return qualifiers[slotIndex] || fallback || "Qualifié à déterminer";
-}
-
-function getQualifiedTeams(userData){
-  const orderedGroups = state.teams?.groups || [];
-  const teams = [];
-  for (const group of orderedGroups){
-    const q = userData.qualifiers?.[group];
-    if (q?.first) teams.push(q.first);
-    if (q?.second) teams.push(q.second);
-  }
-  return Array.from(new Set(teams.filter(Boolean)));
+  return {
+    homeLabel: resolveKnockoutSlot(match.homeLabel, userData),
+    awayLabel: resolveKnockoutSlot(match.awayLabel, userData)
+  };
 }
 
 function resolveKnockoutSlot(label, userData){
