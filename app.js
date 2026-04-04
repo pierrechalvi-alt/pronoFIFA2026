@@ -314,7 +314,7 @@ function renderWelcome(){
 
 function renderApp(){
   const u = currentUser();
-  const isContestMode = Boolean(u.koSubmittedAt);
+  const isContestMode = Boolean(u.tieBreakerSubmittedAt);
   APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
   wireMatchButtons();
   wireHubControls();
@@ -377,6 +377,7 @@ function renderPredictionJourney(){
           </div>
           <button class="btn primary" id="submitBonusBtn" ${u.tieBreakerSubmittedAt ? "disabled" : ""}>Valider la question subsidiaire</button>
         </div>
+        ${u.tieBreakerSubmittedAt ? `<p><b>✅ Ton prono a bien été enregistré.</b></p>` : ""}
       ` : `<p><small>Disponible après “Je valide définitivement”.</small></p>`}
     </section>
   `;
@@ -829,8 +830,7 @@ function submitKOStage(){
   const now = new Date().toISOString();
   u.koSubmittedAt = now;
   u.finalSubmittedAt = now;
-  alert("Ta grille a été soumise ✅");
-  state.hubTab = "matches";
+  alert("Ta grille est validée ✅ Tu peux maintenant répondre à la question subsidiaire pour finaliser ton enregistrement.");
   saveAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
   render();
@@ -845,7 +845,8 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "leaderboard";
+  state.hubTab = "matches";
+  alert("Ton prono a bien été enregistré ✅");
   saveAll();
   render();
 }
