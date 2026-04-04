@@ -346,6 +346,7 @@ function render(){
   USERBOX.innerHTML = state.me
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
+         <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
          <span class="badge">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
@@ -758,8 +759,7 @@ function renderLeaderboardView(){
     </div>
     ${selectedUser ? `
       <div class="hr"></div>
-      <h2>Vue d’ensemble de ${escapeHtml(selectedUser.profile.firstName)} ${escapeHtml(selectedUser.profile.lastName)}</h2>
-      ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
+      ${renderPicksTable(selectedUser, `${selectedUser.profile.firstName} ${selectedUser.profile.lastName}`, { title: `Les pronos de ${selectedUser.profile.firstName} ${selectedUser.profile.lastName}` })}
     ` : ""}
   `;
 }
@@ -840,7 +840,15 @@ function renderTournamentMatchesCenter(){
   const upcoming = all.filter((m) => !Number.isFinite(m.scoreHome) || !Number.isFinite(m.scoreAway)).slice(0, 8);
   const renderList = (list, withScore) => list.length ? list.map((m) => {
     const info = getMatchDisplayTeams(currentUser(), m);
+    const schedule = [m.date, m.time].filter(Boolean).join(" • ");
     return `
+      <div>
+        <div class="match-card">
+          <span class="team-col">${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
+          <b class="vs-col">${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
+          <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
+        </div>
+        ${!withScore ? `<div class="meta">${escapeHtml(schedule || "Date/heure à confirmer")}</div>` : ""}
       <div class="match-card">
         <span class="team-col">${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
         <b class="vs-col">${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
@@ -1136,13 +1144,11 @@ function renderPlayerHub(){
           `).join("")}
           ${selectedUser ? `
             <div class="hr"></div>
-            <h2>Grille de ${escapeHtml(selectedUserLabel)}</h2>
-            ${renderPicksTable(selectedUser, selectedUser.profile.firstName)}
+            ${renderPicksTable(selectedUser, selectedUserLabel, { title: `Les pronos de ${selectedUserLabel}` })}
           ` : ""}
         ` : ""}
         ${state.hubTab === "myPicks" ? `
-          <h2>Ma grille de pronostics</h2>
-          ${renderPicksTable(currentUser(), "Moi")}
+          ${renderPicksTable(currentUser(), "moi", { title: "Mes pronos" })}
         ` : ""}
         ${state.hubTab === "stats" ? `
           <h2>Statistiques utiles</h2>
@@ -1182,6 +1188,8 @@ function renderCalendar(){
   `;
 }
 
+function renderPicksTable(userData, label, options = {}){
+  const title = options.title || `Les pronos de ${label}`;
 function renderPicksTable(userData, label){
   const groupMatches = (state.matches.groupStage || []).slice().sort((a, b) => a.id - b.id);
   const groupedByLetter = new Map();
@@ -1213,6 +1221,7 @@ function renderPicksTable(userData, label){
 
   return `
     <section>
+      <h2>${escapeHtml(title)}</h2>
       <h2>Vue d'ensemble de la grille — ${escapeHtml(label)}</h2>
       <div class="groups-visual-grid">${groupBlocks}</div>
     </section>
