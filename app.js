@@ -7,7 +7,7 @@ const LS_KEY = "fwc26_pronos_v1";
 const state = {
   me: null,
   onboardingStep: "welcome", // welcome | profile | app
-  view: "groups", // groups | qualifs | ko | recap
+  view: "overview", // overview | groups | ko | leaderboard | stats
   hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
@@ -258,8 +258,8 @@ function renderProfileSetup(){
   APP.innerHTML = `
     <div class="grid two">
       <section class="card">
-        <h1>Présentez-vous !</h1>
-        <p>Qui je suis !? Deux infos sérieuses et un surnom pour la gloire.</p>
+        <h1>Ton profil</h1>
+        <p>Renseigne simplement ton prénom et ton nom pour démarrer.</p>
         <div class="row">
           <div class="field" style="flex:1; min-width:220px">
             <label>Prénom</label>
@@ -268,10 +268,6 @@ function renderProfileSetup(){
           <div class="field" style="flex:1; min-width:220px">
             <label>Nom</label>
             <input id="lastName" placeholder="Ex: Benzema" autocomplete="family-name" />
-          </div>
-          <div class="field" style="flex:1; min-width:220px">
-            <label>Surnom</label>
-            <input id="nickname" placeholder="Ex: Madame Oracle" />
           </div>
         </div>
         <div class="row" style="margin-top:12px">
@@ -283,9 +279,8 @@ function renderProfileSetup(){
   document.getElementById("nextBtn").onclick = () => {
     const firstName = document.getElementById("firstName").value.trim();
     const lastName  = document.getElementById("lastName").value.trim();
-    const nickname  = document.getElementById("nickname").value.trim();
-    if (!firstName || !lastName || !nickname) return alert("Merci de compléter prénom, nom et surnom.");
-    setUser({ firstName, lastName, nickname });
+    if (!firstName || !lastName) return alert("Merci de compléter prénom et nom.");
+    setUser({ firstName, lastName, nickname: "" });
   };
 }
 
@@ -293,92 +288,21 @@ function renderApp(){
   const u = currentUser();
   const total = countTotalMatches();
   const done = countPicks(u);
-  const groupTotal = state.matches.groupStage.length;
-  const groupDone = countPicksByStage(u, "GROUP");
-  const koTotal = state.matches.knockout.length;
-  const koDone = countPicksByStage(u, "KO");
   const percent = total ? Math.round((done / total) * 100) : 0;
+  const autoQualifiers = computeAutoQualifiers(u);
 
   APP.innerHTML = `
-    <div class="grid two">
-      <section class="card">
-        <h1>Pronos Coupe du Monde 2026</h1>
-        <p>
-          Objectif : être le plus proche possible… et prétendre que c’était “évident”.
-          (Pronostics : <b>vainqueur / nul</b> seulement.)
-        </p>
-        <div class="row" style="margin-top:8px">
-          <span class="badge a2">1) Infos perso ✅</span>
-          <span class="badge ${u.finalSubmittedAt ? "a2" : ""}">2) Pronostics ${u.finalSubmittedAt ? "✅" : "en cours"}</span>
-          <span class="badge ${u.tieBreakerSubmittedAt ? "a1" : ""}">3) Subsidiaire ${u.tieBreakerSubmittedAt ? "✅" : "à faire"}</span>
-        </div>
-
-        <div class="hr"></div>
-
-        <div class="row">
-          <span class="badge a2">Poules</span><span class="badge">1 pt / match</span>
-          <span class="badge a3">Finale</span><span class="badge">32 pts</span>
-        </div>
-
-        <div class="hr"></div>
-
-        <h2>Statut de validation</h2>
-        <p>
-          ${u.finalSubmittedAt
-            ? `Pronostics verrouillés le <b>${new Date(u.finalSubmittedAt).toLocaleString("fr-FR")}</b>.`
-            : `Tu peux modifier librement tes pronos tant que l’envoi définitif n’est pas fait.`}
-        </p>
-
-        ${u.finalSubmittedAt ? `
-          <div class="field" style="margin-top:12px">
-            <label>Question subsidiaire (total de buts sur 104 matchs)</label>
-            <input id="bonusGoals" type="number" min="0" step="1" placeholder="Ex: 312"
-                   value="${u.bonusGoals ?? ""}" ${u.tieBreakerSubmittedAt ? "disabled" : ""}/>
-          </div>
-          <div class="row" style="margin-top:12px">
-            <button class="btn primary" id="tieBtn" ${u.tieBreakerSubmittedAt ? "disabled" : ""}>Envoyer la réponse subsidiaire</button>
-          </div>
-        ` : ""}
-
-      </section>
-
-      <aside class="card">
-        <h2>Progression</h2>
-        <p><b>${done}/${total}</b> matchs pronostiqués.</p>
-        <div class="progress">
-          <div class="progress-bar" style="width:${percent}%"></div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <span class="badge a2">Poules: ${groupDone}/${groupTotal}</span>
-          <span class="badge a4">Phase finale: ${koDone}/${koTotal}</span>
-        </div>
-        <small>Ton avancée est sauvegardée automatiquement dans ce navigateur.</small>
-      </aside>
-    </div>
-
-    <section class="card" style="margin-top:14px">
-      <h2>Parcours de pronostic</h2>
-      <div class="flow-steps">
-        <div class="flow-step ${groupDone === groupTotal ? "done" : ""}">
-          <b>1. Phase de groupes</b>
-          <span>${groupDone}/${groupTotal} matchs</span>
-        </div>
-        <div class="flow-step ${koDone === koTotal ? "done" : ""}">
-          <b>2. Phase finale</b>
-          <span>${koDone}/${koTotal} matchs</span>
-        </div>
-        <div class="flow-step ${u.finalSubmittedAt ? "done" : ""}">
-          <b>3. Envoi final</b>
-          <span>${u.finalSubmittedAt ? "verrouillé" : "à valider"}</span>
-        </div>
-        <div class="flow-step ${u.tieBreakerSubmittedAt ? "done" : ""}">
-          <b>4. Subsidiaire</b>
-          <span>${u.tieBreakerSubmittedAt ? "complète" : "à compléter"}</span>
-        </div>
+    <section class="card">
+      <h1>Vue compétition</h1>
+      <div class="row">
+        <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>
+        <span class="badge">Progression : ${done}/${total} (${percent}%)</span>
+        <span class="badge a4">Qualifiés auto : ${autoQualifiers.qualifiedCount}/24</span>
       </div>
+      <small>Les équipes qualifiées sont reportées automatiquement dans le tableau final selon tes pronostics.</small>
     </section>
 
-    <div class="card" style="margin-top:14px">
+    <div class="card" style="margin-top:12px">
       <div class="row" style="margin-bottom:10px">
         <div class="field" style="flex:1; min-width:220px">
           <label>Recherche rapide (équipe / ville / stade)</label>
@@ -390,20 +314,16 @@ function renderApp(){
         </label>
       </div>
       <div class="tabs">
-        <div class="tab ${state.view==="groups"?"active":""}" data-view="groups">Phase de groupes</div>
-        <div class="tab ${state.view==="qualifs"?"active":""}" data-view="qualifs">Qualifiés</div>
-        <div class="tab ${state.view==="ko"?"active":""}" data-view="ko">Phase finale</div>
-        <div class="tab ${state.view==="recap"?"active":""}" data-view="recap">Récap</div>
-        <div class="tab ${state.view==="community"?"active":""}" data-view="community">Communauté</div>
+        <div class="tab ${state.view==="overview"?"active":""}" data-view="overview">Vue d’ensemble</div>
+        <div class="tab ${state.view==="groups"?"active":""}" data-view="groups">Poules</div>
+        <div class="tab ${state.view==="ko"?"active":""}" data-view="ko">Tableau final</div>
+        <div class="tab ${state.view==="leaderboard"?"active":""}" data-view="leaderboard">Classement</div>
+        <div class="tab ${state.view==="stats"?"active":""}" data-view="stats">Statistiques</div>
       </div>
       <div id="panel"></div>
     </div>
   `;
 
-  const bonus = document.getElementById("bonusGoals");
-  if (bonus) bonus.oninput = (e) => setBonusGoals(e.target.value);
-  const tieBtn = document.getElementById("tieBtn");
-  if (tieBtn) tieBtn.onclick = () => submitTieBreaker();
   document.getElementById("filterText").oninput = (e) => {
     state.filterText = e.target.value;
     render();
@@ -418,15 +338,44 @@ function renderApp(){
   }
 
   const panel = document.getElementById("panel");
+  if (state.view === "overview") panel.innerHTML = renderOverview();
   if (state.view === "groups") panel.innerHTML = renderGroups();
-  if (state.view === "qualifs") panel.innerHTML = renderQualifs();
   if (state.view === "ko") panel.innerHTML = renderKO();
-  if (state.view === "recap") panel.innerHTML = renderRecap();
-  if (state.view === "community") panel.innerHTML = renderPlayerHub();
+  if (state.view === "leaderboard") panel.innerHTML = renderLeaderboardView();
+  if (state.view === "stats") panel.innerHTML = renderStatsView();
 
   wireMatchButtons();
-  wireQualifs();
   wireHubControls();
+}
+
+function renderOverview(){
+  const groups = state.teams.groups;
+  const u = currentUser();
+  const standings = computeGroupStandingsFromPicks(u);
+  return `
+    <div class="grid two">
+      <section>
+        <h2>Récapitulatif des poules</h2>
+        ${groups.map((g) => {
+          const rows = (standings[g] || []).slice(0, 4);
+          return `
+            <div class="hr"></div>
+            <h3>Groupe ${g}</h3>
+            <div class="mini-table">
+              ${rows.map((r, idx) => `
+                <div><b>${idx + 1}.</b> ${escapeHtml(r.team)}</div>
+                <div>${r.pts} pts</div>
+              `).join("")}
+            </div>
+          `;
+        }).join("")}
+      </section>
+      <section>
+        <h2>Tableau final (dates & lieux)</h2>
+        ${renderBracketTable(u)}
+      </section>
+    </div>
+  `;
 }
 
 function renderGroups(){
@@ -497,7 +446,7 @@ function renderKO(){
     { key:"FINAL", title:"Finale" }
   ];
 
-  let html = `<p>Pronostique toute la phase finale jusqu’au vainqueur : <b>32/32</b> matchs. À partir des seizièmes, le nul n'est plus disponible (il faut choisir le qualifié).</p>`;
+  let html = `<p>Tableau final alimenté automatiquement par tes pronostics. Choisis le qualifié pour chaque match.</p>`;
 
   for (const r of rounds){
     const ms = filterMatches(ko.filter(m => m.round === r.key));
@@ -535,6 +484,47 @@ function renderRecap(){
     </div>
     ${u.tieBreakerSubmittedAt ? renderPlayerHub() : ""}
   `;
+}
+
+function renderLeaderboardView(){
+  const rankings = computeLeaderboard();
+  const selectedUser = getSelectedLeaderboardUser();
+  if (!rankings.length) return `<p>Aucun joueur enregistré pour le moment.</p>`;
+  return `
+    <div class="leaderboard-card">
+      <table class="leaderboard-table">
+        <thead>
+          <tr><th>Rang</th><th>Joueur</th><th>Pronos</th><th>Complétion</th></tr>
+        </thead>
+        <tbody>
+          ${rankings.map((r, idx) => `
+            <tr class="${state.selectedLeaderboardUserKey === r.key ? "active" : ""}" data-playerkey="${escapeAttr(r.key)}">
+              <td>#${idx + 1}</td>
+              <td>${escapeHtml(r.label)}</td>
+              <td>${r.done}/${r.total}</td>
+              <td>${Math.round((r.done / r.total) * 100)}%</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${selectedUser ? `
+      <div class="hr"></div>
+      <h2>Vue d’ensemble de ${escapeHtml(selectedUser.profile.firstName)} ${escapeHtml(selectedUser.profile.lastName)}</h2>
+      ${renderBracketTable(selectedUser)}
+    ` : ""}
+  `;
+}
+
+function renderStatsView(){
+  const stats = computeCommunityStats();
+  if (!stats.length) return `<p>Aucune statistique disponible pour le moment.</p>`;
+  return stats.map((item) => `
+    <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0">
+      <span>${escapeHtml(item.label)}</span>
+      <span class="badge a2">${item.rate}% (${item.count}/${item.total})</span>
+    </div>
+  `).join("");
 }
 
 /* ---------- UI helpers ---------- */
@@ -750,24 +740,35 @@ function getSelectedLeaderboardUser(){
 }
 
 function computeCommunityStats(){
-  const users = Object.values(state.data.users || {}).filter((u) => u?.picks && u.tieBreakerSubmittedAt);
+  const users = Object.values(state.data.users || {}).filter((u) => u?.picks);
   const total = users.length;
   if (!total) return [];
+  const finalMatch = getMatchById(104);
+  if (!finalMatch) return [];
+  const winnerCounts = new Map();
+  for (const u of users){
+    const predicted = u.picks?.["104"];
+    const teams = getMatchDisplayTeams(u, finalMatch);
+    const winner = predicted === "H" ? teams.homeLabel : predicted === "A" ? teams.awayLabel : null;
+    if (!winner) continue;
+    winnerCounts.set(winner, (winnerCounts.get(winner) || 0) + 1);
+  }
+  const topWinners = [...winnerCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([team, count]) => ({
+      label: `Voient ${team} vainqueur de la Coupe du Monde`,
+      count, total, rate: Math.round((count / total) * 100)
+    }));
 
-  const targets = [
-    { matchId: 97, team: "France", label: "Voient la France en quart (QF 97)" },
-    { matchId: 104, team: "Brésil", label: "Voient le Brésil en finale (match 104)" },
-    { matchId: 104, team: "France", label: "Voient la France en finale (match 104)" }
-  ];
-  return targets.map((target) => {
-    const count = users.filter((u) => {
-      const match = getMatchById(target.matchId);
-      if (!match) return false;
-      const { homeLabel, awayLabel } = getMatchDisplayTeams(u, match);
-      return normalizeName(homeLabel) === normalizeName(target.team) || normalizeName(awayLabel) === normalizeName(target.team);
-    }).length;
-    return { label: target.label, count, total, rate: Math.round((count / total) * 100) };
+  const fullyCompleted = users.filter((u) => countPicks(u) === countTotalMatches()).length;
+  topWinners.push({
+    label: "Joueurs ayant rempli toute leur grille",
+    count: fullyCompleted,
+    total,
+    rate: Math.round((fullyCompleted / total) * 100)
   });
+  return topWinners;
 }
 
 function normalizeName(value){
@@ -783,10 +784,102 @@ function getMatchById(id){
     .find((m) => Number(m.id) === Number(id));
 }
 
+function renderBracketTable(userData){
+  const ko = (state.matches.knockout || []).slice().sort((a, b) => a.id - b.id);
+  return `
+    <div class="table-wrap">
+      <table class="picks-table">
+        <thead><tr><th>Match</th><th>Tour</th><th>Affiche</th><th>Date / Heure</th><th>Lieu</th></tr></thead>
+        <tbody>
+          ${ko.map((m) => {
+            const info = getMatchDisplayTeams(userData, m);
+            return `
+              <tr>
+                <td>${m.id}</td>
+                <td>${escapeHtml(roundLabel(m.round) || "-")}</td>
+                <td>${escapeHtml(info.homeLabel)} vs ${escapeHtml(info.awayLabel)}</td>
+                <td>${escapeHtml([m.date, m.time].filter(Boolean).join(" • ") || "À confirmer")}</td>
+                <td>${escapeHtml([m.city, m.stadium].filter(Boolean).join(" • ") || "À confirmer")}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function computeGroupStandingsFromPicks(userData){
+  const standingsByGroup = {};
+  for (const g of state.teams.groups || []){
+    const teams = state.teams.teamsByGroup[g] || [];
+    const table = new Map(teams.map((team) => [team, { team, pts: 0, gd: 0, played: 0 }]));
+    const matches = (state.matches.groupStage || []).filter((m) => m.group === g);
+    for (const m of matches){
+      const pick = userData.picks?.[String(m.id)];
+      if (!pick) continue;
+      const home = table.get(m.home);
+      const away = table.get(m.away);
+      if (!home || !away) continue;
+      home.played += 1;
+      away.played += 1;
+      if (pick === "H") { home.pts += 3; home.gd += 1; away.gd -= 1; }
+      if (pick === "A") { away.pts += 3; away.gd += 1; home.gd -= 1; }
+      if (pick === "D") { home.pts += 1; away.pts += 1; }
+    }
+    standingsByGroup[g] = [...table.values()].sort((a, b) => (
+      b.pts - a.pts || b.gd - a.gd || a.team.localeCompare(b.team)
+    ));
+  }
+  return standingsByGroup;
+}
+
+function computeAutoQualifiers(userData){
+  const standings = computeGroupStandingsFromPicks(userData);
+  const qualifiers = {};
+  const thirds = [];
+  for (const g of state.teams.groups || []){
+    const rows = standings[g] || [];
+    qualifiers[`${g}1`] = rows[0]?.team || `${g}1 à définir`;
+    qualifiers[`${g}2`] = rows[1]?.team || `${g}2 à définir`;
+    if (rows[2]) thirds.push({ slot: `${g}3`, ...rows[2] });
+  }
+  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || a.team.localeCompare(b.team));
+  for (let i = 0; i < 8; i += 1){
+    qualifiers[`BT${i + 1}`] = thirds[i]?.team || `Meilleur 3e #${i + 1}`;
+  }
+  const qualifiedCount = Object.values(qualifiers).filter((v) => !String(v).includes("à définir")).length;
+  return { qualifiers, standings, qualifiedCount };
+}
+
+function getR32TeamsForMatch(matchId, userData){
+  const slots = [
+    "A1","B2","C1","D2","E1","F2","G1","H2",
+    "I1","J2","K1","L2","A2","B1","C2","D1",
+    "E2","F1","G2","H1","I2","J1","K2","L1",
+    "BT1","BT8","BT2","BT7","BT3","BT6","BT4","BT5"
+  ];
+  const index = (Number(matchId) - 73) * 2;
+  if (index < 0 || index >= slots.length) return null;
+  const auto = computeAutoQualifiers(userData).qualifiers;
+  return {
+    homeLabel: auto[slots[index]] || slots[index],
+    awayLabel: auto[slots[index + 1]] || slots[index + 1]
+  };
+}
+
 function getMatchDisplayTeams(userData, match){
   if (!match) return { homeLabel: "À définir", awayLabel: "À définir" };
   if (match.stage !== "KO") {
     return { homeLabel: match.home || "À définir", awayLabel: match.away || "À définir" };
+  }
+  if (match.round === "R32") {
+    const isGeneric = String(match.homeLabel || "").toLowerCase().includes("qualifié")
+      || String(match.awayLabel || "").toLowerCase().includes("qualifié");
+    if (isGeneric) {
+      const fromGroups = getR32TeamsForMatch(match.id, userData);
+      if (fromGroups) return fromGroups;
+    }
   }
   return {
     homeLabel: resolveKnockoutSlot(match.homeLabel, userData),

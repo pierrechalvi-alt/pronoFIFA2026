@@ -218,6 +218,31 @@ small{color:var(--muted)}
 code{color:#1d3a85}
 
 .hub-layout{display:grid;gap:12px;grid-template-columns:1fr}
+
+.mini-table{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:6px 12px;
+  font-size:13px;
+}
+
+.leaderboard-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+.leaderboard-table th,
+.leaderboard-table td{
+  border-bottom:1px solid var(--line);
+  padding:10px 8px;
+  text-align:left;
+}
+.leaderboard-table tbody tr{
+  cursor:pointer;
+}
+.leaderboard-table tbody tr.active{
+  background:rgba(15,109,255,.12);
+}
 @media(min-width:980px){.hub-layout{grid-template-columns:1.1fr .9fr}}
 
 .player-row{
