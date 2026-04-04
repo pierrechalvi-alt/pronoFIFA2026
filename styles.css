@@ -163,7 +163,7 @@ input:focus{border-color: rgba(34,195,182,.65)}
 .meta{font-size:11px;color:var(--muted)}
 .picks{display:flex;gap:6px;justify-content:flex-end}
 .pick{
-  width:38px;height:34px;
+  min-height:34px;
   border-radius:12px;
   border:1px solid var(--line);
   background: rgba(255,255,255,0.98);
@@ -173,6 +173,36 @@ input:focus{border-color: rgba(34,195,182,.65)}
 }
 .pick.active{border-color: rgba(34,195,182,.55);background: rgba(34,195,182,.18)}
 .pick:disabled{opacity:.45;cursor:not-allowed}
+.picks-visual{justify-content:flex-end;gap:8px;max-width:420px}
+.pick-label{
+  min-width:116px;
+  padding:8px 10px;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.flow-steps{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:10px;
+  margin-top:8px;
+}
+.flow-step{
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.88);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.flow-step span{color:var(--muted);font-size:12px}
+.flow-step.done{
+  border-color: rgba(18,184,134,.48);
+  background: linear-gradient(135deg, rgba(18,184,134,.14), rgba(15,109,255,.10));
+}
 
 .hr{height:1px;background:var(--line);margin:14px 0}
 
@@ -186,3 +216,49 @@ input:focus{border-color: rgba(34,195,182,.65)}
 .footer .sep{opacity:.5}
 small{color:var(--muted)}
 code{color:#1d3a85}
+
+.hub-layout{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:980px){.hub-layout{grid-template-columns:1.1fr .9fr}}
+
+.player-row{
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.86);
+  border-radius:12px;
+  padding:8px 10px;
+  margin:6px 0;
+  cursor:pointer;
+  text-align:left;
+}
+.player-row.active{
+  border-color: rgba(15,109,255,.38);
+  background: linear-gradient(135deg, rgba(15,109,255,.10), rgba(18,184,134,.10));
+}
+
+.table-wrap{
+  max-height:360px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:12px;
+}
+.picks-table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:620px;
+  font-size:12px;
+}
+.picks-table th,.picks-table td{
+  border-bottom:1px solid var(--line);
+  padding:7px 8px;
+}
+.picks-table th{
+  position:sticky;
+  top:0;
+  background:#f4f8ff;
+  z-index:1;
+  text-align:left;
+}
