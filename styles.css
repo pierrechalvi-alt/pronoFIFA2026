@@ -77,6 +77,13 @@ body{
 .logo-wordmark span{
   color:var(--a1);
 }
+.logo-official{
+  width:54px;
+  height:72px;
+  object-fit:contain;
+  display:block;
+}
+.brand .sub{color:var(--muted);font-size:12px;margin-top:4px}
 .userbox{
   margin-left:auto;
   color:var(--text);
