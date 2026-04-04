@@ -99,13 +99,15 @@ function buildGroupStageMatches(teams, providedGroup){
       const provided = providedById.get(id);
       const generatedHome = teamList[homeIdx];
       const generatedAway = teamList[awayIdx];
+      const home = resolveGroupTeamLabel(provided?.home, generatedHome, teamList);
+      const away = resolveGroupTeamLabel(provided?.away, generatedAway, teamList);
 
       groupStage.push({
         id,
         stage: "GROUP",
         group,
-        home: isPlaceholderTeam(provided?.home) ? generatedHome : provided.home,
-        away: isPlaceholderTeam(provided?.away) ? generatedAway : provided.away,
+        home,
+        away,
         date: provided?.date ?? null,
         time: provided?.time ?? null,
         city: provided?.city ?? null,
@@ -116,6 +118,18 @@ function buildGroupStageMatches(teams, providedGroup){
     }
   }
   return groupStage;
+}
+
+function resolveGroupTeamLabel(providedTeam, generatedTeam, groupTeams){
+  if (isPlaceholderTeam(providedTeam)) return generatedTeam;
+  if (!isTeamInGroup(providedTeam, groupTeams)) return generatedTeam;
+  return providedTeam;
+}
+
+function isTeamInGroup(teamName, groupTeams){
+  const provided = normalizeName(teamName);
+  if (!provided) return false;
+  return groupTeams.some((team) => normalizeName(team) === provided);
 }
 
 function isPlaceholderTeam(name){
@@ -140,8 +154,15 @@ function userKey(profile){
 }
 
 function loadAll(){
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || { users:{}, lastUserKey:null }; }
-  catch { return { users:{}, lastUserKey:null }; }
+  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] } };
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LS_KEY)) || fallback;
+    if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
+      parsed.thirdHalf = { comments:[] };
+    }
+    return parsed;
+  }
+  catch { return fallback; }
 }
 function saveAll(){ localStorage.setItem(LS_KEY, JSON.stringify(state.data)); }
 
@@ -300,7 +321,7 @@ function renderWelcome(){
 
 function renderApp(){
   const u = currentUser();
-  const isContestMode = Boolean(u.koSubmittedAt);
+  const isContestMode = Boolean(u.tieBreakerSubmittedAt);
   APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
   wireMatchButtons();
   wireHubControls();
@@ -363,6 +384,7 @@ function renderPredictionJourney(){
           </div>
           <button class="btn primary" id="submitBonusBtn" ${u.tieBreakerSubmittedAt ? "disabled" : ""}>Valider la question subsidiaire</button>
         </div>
+        ${u.tieBreakerSubmittedAt ? `<p><b>✅ Ton prono a bien été enregistré.</b></p>` : ""}
       ` : `<p><small>Disponible après “Je valide définitivement”.</small></p>`}
     </section>
   `;
@@ -380,12 +402,14 @@ function renderTournamentHub(){
         <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
         <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
         <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
+        <div class="tab ${state.hubTab==="thirdHalf"?"active":""}" data-hubtab="thirdHalf">3ème mi-temps</div>
       </div>
       ${state.hubTab === "matches" ? renderTournamentMatchesCenter() : ""}
       ${state.hubTab === "matches" ? `<div class="hr"></div>` : ""}
       ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
       ${state.hubTab === "stats" ? renderStatsView() : ""}
       ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
+      ${state.hubTab === "thirdHalf" ? renderThirdHalfView() : ""}
     </section>
   `;
 }
@@ -625,6 +649,48 @@ function renderStatsView(){
   `;
 }
 
+function renderThirdHalfView(){
+  const comments = getThirdHalfComments();
+  return `
+    <h2>3ème mi-temps</h2>
+    <p>Laisse un commentaire, ajoute une photo et réagis aux posts des autres 🔥</p>
+    <div class="card" style="padding:12px; margin-bottom:12px">
+      <div class="field">
+        <label>Ton commentaire</label>
+        <textarea id="thirdHalfText" rows="3" placeholder="Ex: Je le sentais ce but à la 89e 😎"></textarea>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="thirdHalfPhoto" type="file" accept="image/*" />
+        <button class="btn primary" id="thirdHalfPostBtn">Publier</button>
+      </div>
+      <small>Les messages restent enregistrés à chaque reconnexion.</small>
+    </div>
+    ${comments.length ? comments.map((comment) => renderThirdHalfComment(comment)).join("") : `<small>Aucun commentaire pour l'instant.</small>`}
+  `;
+}
+
+function renderThirdHalfComment(comment){
+  const me = state.me ? userKey(state.me) : "";
+  const likes = Object.keys(comment.likes || {}).length;
+  const liked = Boolean(comment.likes?.[me]);
+  const date = new Date(comment.createdAt);
+  const displayDate = Number.isNaN(date.getTime()) ? "Date inconnue" : date.toLocaleString("fr-FR");
+  return `
+    <article class="card" style="padding:12px; margin-bottom:10px">
+      <div class="row" style="justify-content:space-between">
+        <b>${escapeHtml(comment.authorLabel)}</b>
+        <span class="meta">${escapeHtml(displayDate)}</span>
+      </div>
+      <p style="margin-top:6px">${escapeHtml(comment.text)}</p>
+      ${comment.photoDataUrl ? `<img src="${escapeAttr(comment.photoDataUrl)}" alt="Photo commentaire" style="max-width:220px; border-radius:10px; border:1px solid var(--line);" />` : ""}
+      <div class="row" style="margin-top:8px">
+        <button class="btn alt" data-like-comment="${escapeAttr(comment.id)}">${liked ? "💙 Je n'aime plus" : "👍 J'aime"}</button>
+        <span class="badge">${likes} like${likes > 1 ? "s" : ""}</span>
+      </div>
+    </article>
+  `;
+}
+
 function renderTournamentMatchesCenter(){
   const all = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
   const past = all.filter((m) => Number.isFinite(m.scoreHome) && Number.isFinite(m.scoreAway)).slice(-8).reverse();
@@ -815,10 +881,8 @@ function submitKOStage(){
   const now = new Date().toISOString();
   u.koSubmittedAt = now;
   u.finalSubmittedAt = now;
-  alert("Ta grille a été soumise ✅");
-  state.hubTab = "matches";
+  alert("Ta grille est validée ✅ Tu peux maintenant répondre à la question subsidiaire pour finaliser ton enregistrement.");
   saveAll();
-  window.scrollTo({ top: 0, behavior: "smooth" });
   render();
 }
 
@@ -831,7 +895,66 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "leaderboard";
+  state.hubTab = "matches";
+  alert("Ton prono a bien été enregistré ✅");
+  saveAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  render();
+}
+
+function getThirdHalfComments(){
+  return (state.data.thirdHalf?.comments || [])
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function submitThirdHalfComment(){
+  const input = document.getElementById("thirdHalfText");
+  const fileInput = document.getElementById("thirdHalfPhoto");
+  const text = (input?.value || "").trim();
+  const file = fileInput?.files?.[0];
+  if (!text) {
+    alert("Écris un commentaire avant de publier.");
+    return;
+  }
+  const publish = (photoDataUrl = "") => {
+    const me = currentUser();
+    if (!me?.profile) return;
+    const key = userKey(me.profile);
+    if (!state.data.thirdHalf) state.data.thirdHalf = { comments:[] };
+    state.data.thirdHalf.comments.push({
+      id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      userKey: key,
+      authorLabel: `${me.profile.firstName} ${me.profile.lastName}`,
+      text,
+      photoDataUrl,
+      createdAt: new Date().toISOString(),
+      likes: {}
+    });
+    saveAll();
+    render();
+  };
+  if (!file) return publish();
+  if (!file.type.startsWith("image/")) {
+    alert("Merci de sélectionner une image valide.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => publish(String(reader.result || ""));
+  reader.readAsDataURL(file);
+}
+
+function toggleCommentLike(commentId){
+  const me = currentUser();
+  if (!me?.profile || !commentId) return;
+  const comments = state.data.thirdHalf?.comments;
+  if (!comments) return;
+  const key = userKey(me.profile);
+  const comment = comments.find((c) => c.id === commentId);
+  if (!comment) return;
+  if (!comment.likes) comment.likes = {};
+  if (comment.likes[key]) delete comment.likes[key];
+  else comment.likes[key] = true;
   saveAll();
   render();
 }
@@ -998,6 +1121,39 @@ function normalizeName(value){
 function getTeamFlag(teamName){
   const key = normalizeName(teamName);
   const flags = {
+    mexique: "🇲🇽",
+    "afrique du sud": "🇿🇦",
+    "republique de coree": "🇰🇷",
+    "tchequie": "🇨🇿",
+    "bosnie-et-herzegovine": "🇧🇦",
+    suisse: "🇨🇭",
+    bresil: "🇧🇷",
+    haiti: "🇭🇹",
+    ecosse: "🏴",
+    "etats-unis": "🇺🇸",
+    turquie: "🇹🇷",
+    allemagne: "🇩🇪",
+    "cote d'ivoire": "🇨🇮",
+    equateur: "🇪🇨",
+    "pays-bas": "🇳🇱",
+    japon: "🇯🇵",
+    suede: "🇸🇪",
+    egypte: "🇪🇬",
+    "nouvelle-zelande": "🇳🇿",
+    espagne: "🇪🇸",
+    "cap-vert": "🇨🇻",
+    "arabie saoudite": "🇸🇦",
+    senegal: "🇸🇳",
+    irak: "🇮🇶",
+    norvege: "🇳🇴",
+    argentine: "🇦🇷",
+    algerie: "🇩🇿",
+    autriche: "🇦🇹",
+    jordanie: "🇯🇴",
+    "rd congo": "🇨🇩",
+    ouzbekistan: "🇺🇿",
+    angleterre: "🏴",
+    panama: "🇵🇦",
     mexico: "🇲🇽",
     "south africa": "🇿🇦",
     "korea republic": "🇰🇷",
@@ -1208,11 +1364,11 @@ function getMatchDisplayTeams(userData, match){
 function resolveKnockoutSlot(label, userData){
   const fallback = label || "À définir";
   const raw = String(label || "");
-  const winnerMatchRef = raw.match(/Vainqueur Match\s*(\d+)/i);
+  const winnerMatchRef = raw.match(/Vainqueur(?:\s+du)?\s+match\s*(\d+)/i);
   if (winnerMatchRef) {
     return pickWinnerName(Number(winnerMatchRef[1]), userData) || fallback;
   }
-  const loserSemiRef = raw.match(/Perdant Demi\s*(\d+)/i);
+  const loserSemiRef = raw.match(/Perdant(?:\s+du)?\s+match\s*(\d+)/i) || raw.match(/Perdant Demi\s*(\d+)/i);
   if (loserSemiRef) {
     return pickLoserName(Number(loserSemiRef[1]), userData) || fallback;
   }
@@ -1264,6 +1420,11 @@ function wireHubControls(){
       state.hubTab = "leaderboard";
       render();
     };
+  }
+  const postBtn = document.getElementById("thirdHalfPostBtn");
+  if (postBtn) postBtn.onclick = () => submitThirdHalfComment();
+  for (const btn of document.querySelectorAll("[data-like-comment]")){
+    btn.onclick = () => toggleCommentLike(btn.dataset.likeComment);
   }
 }
 
@@ -1362,22 +1523,24 @@ function computeTodayMatchStats(){
   const all = [...state.matches.groupStage, ...state.matches.knockout];
   const todayMatches = all.filter((m) => (m.date || "").slice(0, 10) === today);
   return todayMatches.map((m) => {
-    const counts = new Map();
+    const counts = { H: 0, D: 0, A: 0 };
     let total = 0;
     for (const u of users){
       const p = u.picks?.[String(m.id)];
-      if (!p) continue;
-      const teams = getMatchDisplayTeams(u, m);
-      const winner = p === "H" ? teams.homeLabel : p === "A" ? teams.awayLabel : "Nul";
-      counts.set(winner, (counts.get(winner) || 0) + 1);
+      if (!p || !["H", "D", "A"].includes(p)) continue;
+      if (m.stage === "KO" && p === "D") continue;
+      counts[p] += 1;
       total += 1;
     }
-    const breakdown = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([team, count]) => `${Math.round((count / Math.max(1, total)) * 100)}% ${team}`)
+    const teams = getMatchDisplayTeams(currentUser(), m);
+    const labels = { H: teams.homeLabel, D: "Nul", A: teams.awayLabel };
+    const options = m.stage === "KO" ? ["H", "A"] : ["H", "D", "A"];
+    const breakdown = options
+      .filter((option) => counts[option] > 0)
+      .sort((a, b) => counts[b] - counts[a])
+      .map((option) => `${Math.round((counts[option] / Math.max(1, total)) * 100)}% ${labels[option]}`)
       .join(" • ");
-    const info = getMatchDisplayTeams(currentUser(), m);
-    return { match: `${info.homeLabel} vs ${info.awayLabel}`, breakdown: breakdown || "Aucun prono" };
+    return { match: `${teams.homeLabel} vs ${teams.awayLabel}`, breakdown: breakdown || "Aucun prono" };
   });
 }
 
