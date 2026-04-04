@@ -8,7 +8,7 @@ const state = {
   me: null,
   onboardingStep: "welcome", // welcome | profile | app
   view: "overview", // overview | groups | ko | leaderboard | stats
-  hubTab: "dashboard", // dashboard | leaderboard | myPicks | stats
+  hubTab: "leaderboard", // leaderboard | myPicks | stats
   selectedLeaderboardUserKey: null,
   teams: null,
   matches: null,
@@ -291,135 +291,53 @@ function renderProfileSetup(){
 
 function renderApp(){
   const u = currentUser();
-  const flow = getFlowStep(u);
+  const total = countTotalMatches();
+  const done = countPicks(u);
+  const percent = total ? Math.round((done / total) * 100) : 0;
+  const autoQualifiers = computeAutoQualifiers(u);
 
   APP.innerHTML = `
     <section class="card">
-      <h1>Parcours pronostics guidé</h1>
+      <h1>Vue compétition</h1>
       <div class="row">
-        <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>        
-        <span class="badge ${flow==="groups"?"a4":""}">1. Poules ${u.groupSubmittedAt ? "✅" : ""}</span>
-        <span class="badge ${flow==="qualifiers"?"a4":""}">2. Qualifiés ${u.qualifiersSubmittedAt ? "✅" : ""}</span>
-        <span class="badge ${flow==="ko"?"a4":""}">3. Phases finales ${u.koSubmittedAt ? "✅" : ""}</span>
-        <span class="badge ${flow==="bonus"?"a4":""}">4. Subsidiaire ${u.tieBreakerSubmittedAt ? "✅" : ""}</span>
+        <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>
+        <span class="badge">Progression : ${done}/${total} (${percent}%)</span>
+        <span class="badge a4">Qualifiés auto : ${autoQualifiers.qualifiedCount}/24</span>
       </div>
-      <small>Les menus avancés s'activent uniquement une fois tout validé.</small>
+      <small>Les équipes qualifiées sont reportées automatiquement dans le tableau final selon tes pronostics.</small>
     </section>
 
     <div class="card" style="margin-top:12px">
+      <div class="row" style="margin-bottom:10px">
+        <div class="field" style="flex:1; min-width:220px">
+          <label>Recherche rapide (équipe / ville / stade)</label>
+          <input id="filterText" placeholder="Ex: France, New York, Azteca..." value="${escapeAttr(state.filterText)}"/>
+        </div>
+        <label class="toggle-wrap">
+          <input id="unpickedOnly" type="checkbox" ${state.showUnpickedOnly ? "checked" : ""}/>
+          Afficher uniquement les matchs non pronostiqués
+        </label>
+      </div>
+      <div class="tabs">
+        <div class="tab ${state.view==="overview"?"active":""}" data-view="overview">Vue d’ensemble</div>
+        <div class="tab ${state.view==="groups"?"active":""}" data-view="groups">Poules</div>
+        <div class="tab ${state.view==="ko"?"active":""}" data-view="ko">Tableau final</div>
+        <div class="tab ${state.view==="leaderboard"?"active":""}" data-view="leaderboard">Classement</div>
+        <div class="tab ${state.view==="stats"?"active":""}" data-view="stats">Statistiques</div>
+      </div>
       <div id="panel"></div>
     </div>
   `;
-
-  const panel = document.getElementById("panel");
-  if (flow === "groups") panel.innerHTML = renderGroupsStep();
-  if (flow === "qualifiers") panel.innerHTML = renderQualifiersStep();
-  if (flow === "ko") panel.innerHTML = renderKOStep();
-  if (flow === "bonus") panel.innerHTML = renderBonusStep();
-  if (flow === "hub") panel.innerHTML = renderPostSubmissionHub();
-
-  const bonus = document.getElementById("bonusGoals");
-  if (bonus) bonus.oninput = (e) => setBonusGoals(e.target.value);
-
-  wireMatchButtons();
-  wireQualifs();
-  wireHubControls();
 }
 
-function renderOverview(){
-  const groups = state.teams.groups;
-  const u = currentUser();
-  const standings = computeGroupStandingsFromPicks(u);
-  return `
-    <div class="grid two">
-      <section>
-        <h2>Récapitulatif des poules</h2>
-        ${groups.map((g) => {
-          const rows = (standings[g] || []).slice(0, 4);
-          return `
-            <div class="hr"></div>
-            <h3>Groupe ${g}</h3>
-            <div class="mini-table">
-              ${rows.map((r, idx) => `
-                <div><b>${idx + 1}.</b> ${escapeHtml(r.team)}</div>
-                <div>${r.pts} pts</div>
-              `).join("")}
-            </div>
-          `;
-        }).join("")}
-      </section>
-      <section>
-        <h2>Tableau final (dates & lieux)</h2>
-        ${renderBracketTable(u)}
-      </section>
-    </div>
-  `;
-}
-
-function getFlowStep(u){
-  if (!u.groupSubmittedAt) return "groups";
-  if (!u.qualifiersSubmittedAt) return "qualifiers";
-  if (!u.koSubmittedAt) return "ko";
-  if (!u.tieBreakerSubmittedAt) return "bonus";
-  return "hub";
-}
-
-function renderGroupsStep(){
-  const u = currentUser();
-  const total = state.matches.groupStage.length;
-  const done = countPicksByStage(u, "GROUP");
-  const canSubmit = done === total;
-  return `
-    <h2>Étape 1 — Pronostics phase de poules</h2>
-    ${renderGroups()}
-    <div class="hr"></div>
-    <div class="row">
-      <span class="badge">${done}/${total} pronostics remplis</span>
-      <button class="btn primary" id="submitGroupsBtn" ${canSubmit ? "" : "disabled"}>Valider les poules</button>
-    </div>
-    <small>${canSubmit ? "Après validation, les poules seront verrouillées." : "Complète d'abord tous les matchs de poules."}</small>
-  `;
-}
-
-function renderQualifiersStep(){
-  return `
-    <h2>Étape 2 — Choix des qualifiés</h2>
-    <p>Choisis les 2 qualifiés de chaque groupe. Ils seront reportés dans la phase finale.</p>
-    ${renderQualifs()}
-    <div class="hr"></div>
-    <button class="btn primary" id="submitQualifiersBtn">Valider les qualifiés</button>
-  `;
-}
-
-function renderKOStep(){
-  const u = currentUser();
-  const total = state.matches.knockout.length;
-  const done = countPicksByStage(u, "KO");
-  const canSubmit = done === total;
-  return `
-    <h2>Étape 3 — Pronostics phases finales</h2>
-    ${renderKO()}
-    <div class="hr"></div>
-    <div class="row">
-      <span class="badge">${done}/${total} pronostics KO remplis</span>
-      <button class="btn primary" id="submitKOBtn" ${canSubmit ? "" : "disabled"}>Valider la phase finale</button>
-    </div>
-  `;
-}
-
-function renderBonusStep(){
-  const u = currentUser();
-  return `
-    <h2>Étape 4 — Question subsidiaire</h2>
-    <div class="field" style="margin-top:12px">
-      <label>Total de buts sur 104 matchs</label>
-      <input id="bonusGoals" type="number" min="0" step="1" placeholder="Ex: 312" value="${u.bonusGoals ?? ""}"/>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn primary" id="submitBonusBtn">Valider définitivement</button>
-    </div>
-  `;
-}
+  document.getElementById("filterText").oninput = (e) => {
+    state.filterText = e.target.value;
+    render();
+  };
+  document.getElementById("unpickedOnly").onchange = (e) => {
+    state.showUnpickedOnly = Boolean(e.target.checked);
+    render();
+  };
 
 function renderPostSubmissionHub(){
   return `
@@ -461,26 +379,45 @@ function renderMatchStatusBoard(){
   `;
 }
 
-function renderMatchList(title, list){
-  return `
-    <div class="hr"></div>
-    <h3>${escapeHtml(title)}</h3>
-    ${list.length ? list.map((m) => {
-      const info = getMatchDisplayTeams(currentUser(), m);
-      return `<div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding:6px 0">
-        <span>M${m.id} • ${escapeHtml(info.homeLabel)} vs ${escapeHtml(info.awayLabel)}</span>
-        <span class="meta">${escapeHtml([m.date, m.time, m.city].filter(Boolean).join(" • ") || "Date à confirmer")}</span>
-      </div>`;
-    }).join("") : `<small>Aucun match dans cette catégorie.</small>`}
-  `;
+  const panel = document.getElementById("panel");
+  if (state.view === "overview") panel.innerHTML = renderOverview();
+  if (state.view === "groups") panel.innerHTML = renderGroups();
+  if (state.view === "ko") panel.innerHTML = renderKO();
+  if (state.view === "leaderboard") panel.innerHTML = renderLeaderboardView();
+  if (state.view === "stats") panel.innerHTML = renderStatsView();
+
+  wireMatchButtons();
+  wireHubControls();
 }
 
-function buildMatchDate(match){
-  if (!match?.date) return null;
-  const hour = match.time || "12:00";
-  const iso = `${match.date}T${hour}:00`;
-  const dt = new Date(iso);
-  return Number.isNaN(dt.getTime()) ? null : dt;
+function renderOverview(){
+  const groups = state.teams.groups;
+  const u = currentUser();
+  const standings = computeGroupStandingsFromPicks(u);
+  return `
+    <div class="grid two">
+      <section>
+        <h2>Récapitulatif des poules</h2>
+        ${groups.map((g) => {
+          const rows = (standings[g] || []).slice(0, 4);
+          return `
+            <div class="hr"></div>
+            <h3>Groupe ${g}</h3>
+            <div class="mini-table">
+              ${rows.map((r, idx) => `
+                <div><b>${idx + 1}.</b> ${escapeHtml(r.team)}</div>
+                <div>${r.pts} pts</div>
+              `).join("")}
+            </div>
+          `;
+        }).join("")}
+      </section>
+      <section>
+        <h2>Tableau final (dates & lieux)</h2>
+        ${renderBracketTable(u)}
+      </section>
+    </div>
+  `;
 }
 
 function renderGroups(){
@@ -1006,22 +943,11 @@ function getR32TeamsForMatch(matchId, userData){
   ];
   const index = (Number(matchId) - 73) * 2;
   if (index < 0 || index >= slots.length) return null;
-  const manual = getManualQualifierSlots(userData);
   const auto = computeAutoQualifiers(userData).qualifiers;
   return {
-    homeLabel: manual[slots[index]] || auto[slots[index]] || slots[index],
-    awayLabel: manual[slots[index + 1]] || auto[slots[index + 1]] || slots[index + 1]
+    homeLabel: auto[slots[index]] || slots[index],
+    awayLabel: auto[slots[index + 1]] || slots[index + 1]
   };
-}
-
-function getManualQualifierSlots(userData){
-  const slots = {};
-  for (const g of state.teams.groups || []){
-    const q = userData.qualifiers?.[g] || {};
-    if (q.first) slots[`${g}1`] = q.first;
-    if (q.second) slots[`${g}2`] = q.second;
-  }
-  return slots;
 }
 
 function getMatchDisplayTeams(userData, match){
