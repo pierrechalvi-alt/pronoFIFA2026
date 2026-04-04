@@ -1,6 +1,5 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
-const ASSET_BASE_URL = new URL("./", import.meta.url);
 
 const LS_KEY = "fwc26_pronos_v1";
 
