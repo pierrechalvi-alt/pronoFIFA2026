@@ -1121,6 +1121,39 @@ function normalizeName(value){
 function getTeamFlag(teamName){
   const key = normalizeName(teamName);
   const flags = {
+    mexique: "🇲🇽",
+    "afrique du sud": "🇿🇦",
+    "republique de coree": "🇰🇷",
+    "tchequie": "🇨🇿",
+    "bosnie-et-herzegovine": "🇧🇦",
+    suisse: "🇨🇭",
+    bresil: "🇧🇷",
+    haiti: "🇭🇹",
+    ecosse: "🏴",
+    "etats-unis": "🇺🇸",
+    turquie: "🇹🇷",
+    allemagne: "🇩🇪",
+    "cote d'ivoire": "🇨🇮",
+    equateur: "🇪🇨",
+    "pays-bas": "🇳🇱",
+    japon: "🇯🇵",
+    suede: "🇸🇪",
+    egypte: "🇪🇬",
+    "nouvelle-zelande": "🇳🇿",
+    espagne: "🇪🇸",
+    "cap-vert": "🇨🇻",
+    "arabie saoudite": "🇸🇦",
+    senegal: "🇸🇳",
+    irak: "🇮🇶",
+    norvege: "🇳🇴",
+    argentine: "🇦🇷",
+    algerie: "🇩🇿",
+    autriche: "🇦🇹",
+    jordanie: "🇯🇴",
+    "rd congo": "🇨🇩",
+    ouzbekistan: "🇺🇿",
+    angleterre: "🏴",
+    panama: "🇵🇦",
     mexico: "🇲🇽",
     "south africa": "🇿🇦",
     "korea republic": "🇰🇷",
@@ -1331,11 +1364,11 @@ function getMatchDisplayTeams(userData, match){
 function resolveKnockoutSlot(label, userData){
   const fallback = label || "À définir";
   const raw = String(label || "");
-  const winnerMatchRef = raw.match(/Vainqueur Match\s*(\d+)/i);
+  const winnerMatchRef = raw.match(/Vainqueur(?:\s+du)?\s+match\s*(\d+)/i);
   if (winnerMatchRef) {
     return pickWinnerName(Number(winnerMatchRef[1]), userData) || fallback;
   }
-  const loserSemiRef = raw.match(/Perdant Demi\s*(\d+)/i);
+  const loserSemiRef = raw.match(/Perdant(?:\s+du)?\s+match\s*(\d+)/i) || raw.match(/Perdant Demi\s*(\d+)/i);
   if (loserSemiRef) {
     return pickLoserName(Number(loserSemiRef[1]), userData) || fallback;
   }

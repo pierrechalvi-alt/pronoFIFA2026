@@ -1,17 +1,90 @@
 {
-  "groups": ["A","B","C","D","E","F","G","H","I","J","K","L"],
+  "groups": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L"
+  ],
   "teamsByGroup": {
-    "A": ["Mexico", "South Africa", "Korea Republic", "Winner play-off D"],
-    "B": ["Canada", "Winner play-off A", "Qatar", "Switzerland"],
-    "C": ["Brazil", "Morocco", "Haiti", "Scotland"],
-    "D": ["USA", "Paraguay", "Australia", "Winner play-off C"],
-    "E": ["Germany", "Curaçao", "Côte d’Ivoire", "Ecuador"],
-    "F": ["Netherlands", "Japan", "Winner play-off B", "Tunisia"],
-    "G": ["Belgium", "Egypt", "IR Iran", "New Zealand"],
-    "H": ["Spain", "Cabo Verde", "Saudi Arabia", "Uruguay"],
-    "I": ["France", "Senegal", "Winner play-off 2", "Norway"],
-    "J": ["Argentina", "Algeria", "Austria", "Jordan"],
-    "K": ["Portugal", "Winner play-off 1", "Uzbekistan", "Colombia"],
-    "L": ["England", "Croatia", "Ghana", "Panama"]
+    "A": [
+      "Mexique",
+      "Afrique du Sud",
+      "République de Corée",
+      "Tchéquie"
+    ],
+    "B": [
+      "Canada",
+      "Bosnie-et-Herzégovine",
+      "Qatar",
+      "Suisse"
+    ],
+    "C": [
+      "Brésil",
+      "Maroc",
+      "Haïti",
+      "Écosse"
+    ],
+    "D": [
+      "États-Unis",
+      "Paraguay",
+      "Australie",
+      "Turquie"
+    ],
+    "E": [
+      "Allemagne",
+      "Curaçao",
+      "Côte d'Ivoire",
+      "Équateur"
+    ],
+    "F": [
+      "Pays-Bas",
+      "Japon",
+      "Suède",
+      "Tunisie"
+    ],
+    "G": [
+      "Belgique",
+      "Égypte",
+      "RI Iran",
+      "Nouvelle-Zélande"
+    ],
+    "H": [
+      "Espagne",
+      "Cap-Vert",
+      "Arabie saoudite",
+      "Uruguay"
+    ],
+    "I": [
+      "France",
+      "Sénégal",
+      "Irak",
+      "Norvège"
+    ],
+    "J": [
+      "Argentine",
+      "Algérie",
+      "Autriche",
+      "Jordanie"
+    ],
+    "K": [
+      "Portugal",
+      "RD Congo",
+      "Ouzbékistan",
+      "Colombie"
+    ],
+    "L": [
+      "Angleterre",
+      "Croatie",
+      "Ghana",
+      "Panamá"
+    ]
   }
 }
