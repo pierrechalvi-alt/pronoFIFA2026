@@ -1209,7 +1209,6 @@ function renderPicksTable(userData, label, options = {}){
               <span class="group-team-name pick-team-name ${homeWinnerClass}" title="${escapeAttr(teams.homeLabel)}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(homeTeamLabel)}</span>
               <span class="vs-chip ${drawClass}">${pickValue === "D" ? "Nul" : "vs"}</span>
               <span class="group-team-name pick-team-name ${awayWinnerClass}" title="${escapeAttr(teams.awayLabel)}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(awayTeamLabel)}</span>
-              <span class="group-team-name pick-team-name ${awayWinnerClass}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
             </div>
           `;
         }).join("")}
