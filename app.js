@@ -548,7 +548,7 @@ function renderTournamentHub(){
         <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
         <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
         <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
-        <div class="tab ${state.hubTab==="thirdHalf"?"active":""}" data-hubtab="thirdHalf">3ème mi-temps</div>
+        <div class="tab ${state.hubTab==="thirdHalf"?"active":""}" data-hubtab="thirdHalf">Le Bistro</div>
       </div>
       ${state.hubTab === "matches" ? renderTournamentMatchesCenter() : ""}
       ${state.hubTab === "matches" ? `<div class="hr"></div>` : ""}
@@ -794,7 +794,7 @@ function renderStatsView(){
 function renderThirdHalfView(){
   const comments = getThirdHalfComments();
   return `
-    <h2>3ème mi-temps</h2>
+    <h2>Le Bistro</h2>
     <p>Laisse un commentaire, ajoute une photo et réagis aux posts des autres 🔥</p>
     <div class="card" style="padding:12px; margin-bottom:12px">
       <div class="field">
