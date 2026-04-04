@@ -46,7 +46,7 @@ body{
 .topbar{
   position:sticky;top:0;z-index:10;
   display:flex;gap:16px;align-items:center;justify-content:space-between;
-  padding:18px 20px;
+  padding:14px 20px;
   background: linear-gradient(90deg, rgba(255,255,255,0.88), rgba(240,246,255,0.88));
   backdrop-filter: blur(8px);
   border-bottom:2px solid var(--line);
@@ -58,7 +58,8 @@ body{
   display:flex;
   flex-direction:column;
   align-items:center;
-  text-align:center
+  text-align:center;
+  pointer-events:none;
 }
 .logo-wordmark{
   font-weight:900;
@@ -86,6 +87,7 @@ body{
 .brand .sub{color:var(--muted);font-size:12px;margin-top:4px}
 .userbox{
   margin-left:auto;
+  min-width:0;
   color:var(--text);
   font-size:13px;
 }
@@ -115,6 +117,12 @@ body{
 }
 .avatar-fallback{padding-top:1px}
 .player-inline{display:inline-flex;align-items:center;gap:8px}
+.userbox .badge{
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 
 .container{max-width:1120px;margin:0 auto;padding:24px 16px 44px}
 
@@ -322,8 +330,79 @@ code{color:#0c59cf}
 .vs-col{justify-self:center}
 
 @media (max-width: 760px){
+  .topbar{
+    padding:10px 10px;
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:8px;
+    align-items:center;
+  }
+  .brand{
+    order:1;
+    position:static;
+    left:auto;
+    transform:none;
+    align-items:flex-start;
+    text-align:left;
+    pointer-events:none;
+  }
+  .logo-wordmark{
+    font-size:13px;
+    padding:6px 10px;
+    white-space:normal;
+    line-height:1.2;
+  }
+  .userbox{
+    order:2;
+    justify-self:end;
+  }
+  .userbox .badge{
+    display:none;
+  }
+  .profile-trigger{
+    padding:4px 6px;
+  }
+  .container{
+    padding:14px 10px 28px;
+  }
+  .card{
+    padding:14px;
+  }
+  .tabs{
+    gap:6px;
+  }
+  .tab{
+    font-size:12px;
+    padding:8px 10px;
+  }
   .match{grid-template-columns: 1fr;gap:8px}
   .picks{justify-content:center}
+  .match-duel,.match-card{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    gap:6px;
+  }
+  .team-chip,.team-col{
+    font-size:13px;
+  }
+  .pick-label{
+    min-width:120px;
+    padding:8px;
+    font-size:12px;
+  }
+  .group-team-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;
+    gap:6px;
+    align-items:center;
+    padding:8px;
+  }
+  .group-team-name{
+    font-size:12px;
+  }
+  .footer{
+    padding:0 10px 20px;
+    font-size:12px;
+  }
   .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
   .container{padding-top:16px}
