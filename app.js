@@ -12,6 +12,7 @@ const SYNC_CHANNEL_NAME = "fwc26_sync";
 let syncChannel = null;
 let communityStream = null;
 let communitySyncTimer = null;
+const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
 
 const state = {
@@ -39,6 +40,7 @@ function registerServiceWorker(){
 }
 
 async function init(){
+  if (enforceCanonicalAppOrigin()) return;
   if (!APP || !USERBOX) {
     console.error("Impossible d'initialiser l'application : éléments racine introuvables.");
     return;
@@ -77,6 +79,23 @@ async function init(){
   }
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
+}
+
+function resolveCanonicalAppOrigin(){
+  const explicitMeta = document.querySelector('meta[name="fwc26-canonical-origin"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_CANONICAL_ORIGIN__ : null;
+  const explicitLocalStorage = readStorageItem("fwc26_canonical_origin");
+  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function enforceCanonicalAppOrigin(){
+  if (!CANONICAL_APP_ORIGIN || !window?.location?.origin) return false;
+  if (window.location.origin === CANONICAL_APP_ORIGIN) return false;
+  const redirectUrl = `${CANONICAL_APP_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(redirectUrl);
+  return true;
 }
 
 async function fetchJson(url){
@@ -289,7 +308,7 @@ function resolveCommunityApiBase(){
   const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
   const explicitLocalStorage = readStorageItem("fwc26_community_api");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || CANONICAL_APP_ORIGIN || "").trim();
   if (!raw) {
     if (window?.location?.protocol === "http:" || window?.location?.protocol === "https:") {
       return window.location.origin;
@@ -720,9 +739,28 @@ function renderWelcome(){
 function renderApp(){
   const u = currentUser();
   const isContestMode = Boolean(u.tieBreakerSubmittedAt);
-  APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
+  APP.innerHTML = `${renderCommunitySyncBanner()}${isContestMode ? renderTournamentHub() : renderPredictionJourney()}`;
   wireMatchButtons();
   wireHubControls();
+}
+
+function renderCommunitySyncBanner(){
+  const isCommunityEnabled = Boolean(COMMUNITY_API_BASE);
+  const endpointLabel = isCommunityEnabled ? COMMUNITY_API_BASE : "Aucun endpoint";
+  return `
+    <section class="card sync-status-card">
+      <div class="row" style="justify-content:space-between; gap:12px">
+        <div>
+          <strong>Synchronisation communauté :</strong>
+          <span class="badge ${isCommunityEnabled ? "a1" : "a2"}" style="margin-left:8px">
+            ${isCommunityEnabled ? "Active" : "Locale uniquement"}
+          </span>
+          <p style="margin:8px 0 0 0">Endpoint API : <code>${escapeHtml(endpointLabel)}</code></p>
+        </div>
+      </div>
+      <small>Pour partager les mêmes comptes/pronostics sur plusieurs téléphones, tous les appareils doivent utiliser exactement la même URL d'application et le même endpoint API.</small>
+    </section>
+  `;
 }
 
 function renderPredictionJourney(){
