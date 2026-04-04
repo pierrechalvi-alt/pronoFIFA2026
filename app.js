@@ -295,24 +295,32 @@ function renderApp(){
   const done = countPicks(u);
   const percent = total ? Math.round((done / total) * 100) : 0;
   const autoQualifiers = computeAutoQualifiers(u);
+  const isContestMode = Boolean(u.tieBreakerSubmittedAt);
 
   APP.innerHTML = `
     <section class="card">
-      <h1>Vue compétition</h1>
-      <div class="row">
+      <h1>${isContestMode ? "Mode concours" : "Mes Pronos"}</h1>
+      <div class="row" style="justify-content:space-between">
         <span class="badge a2">${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</span>
-        <span class="badge">Progression : ${done}/${total} (${percent}%)</span>
         <span class="badge a4">Qualifiés auto : ${autoQualifiers.qualifiedCount}/24</span>
       </div>
-      <small>Les équipes qualifiées sont reportées automatiquement dans le tableau final selon tes pronostics.</small>
+      <div class="progress">
+        <div class="progress-bar" style="width:${percent}%"></div>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <small><b>${done}/${total}</b> matchs pronostiqués</small>
+        <small>${Math.max(0, total - done)} restant(s)</small>
+      </div>
+      <small>${isContestMode
+        ? "Ta grille et ta question subsidiaire sont validées : les pronostics sont verrouillés."
+        : "Les équipes qualifiées sont reportées automatiquement dans le tableau final selon tes pronostics."}</small>
     </section>
 
     <div class="card" style="margin-top:12px">
+      ${isContestMode ? `
+        ${renderPostSubmissionHub()}
+      ` : `
       <div class="row" style="margin-bottom:10px">
-        <div class="field" style="flex:1; min-width:220px">
-          <label>Recherche rapide (équipe / ville / stade)</label>
-          <input id="filterText" placeholder="Ex: France, New York, Azteca..." value="${escapeAttr(state.filterText)}"/>
-        </div>
         <label class="toggle-wrap">
           <input id="unpickedOnly" type="checkbox" ${state.showUnpickedOnly ? "checked" : ""}/>
           Afficher uniquement les matchs non pronostiqués
@@ -325,92 +333,71 @@ function renderApp(){
         <div class="tab ${state.view==="leaderboard"?"active":""}" data-view="leaderboard">Classement</div>
         <div class="tab ${state.view==="stats"?"active":""}" data-view="stats">Statistiques</div>
       </div>
+      `}
       <div id="panel"></div>
     </div>
   `;
-}
+  if (!isContestMode) {
+    document.getElementById("unpickedOnly").onchange = (e) => {
+      state.showUnpickedOnly = Boolean(e.target.checked);
+      render();
+    };
+  }
 
-  document.getElementById("filterText").oninput = (e) => {
-    state.filterText = e.target.value;
-    render();
-  };
-  document.getElementById("unpickedOnly").onchange = (e) => {
-    state.showUnpickedOnly = Boolean(e.target.checked);
-    render();
-  };
+  const panel = document.getElementById("panel");
+  if (isContestMode) {
+    panel.innerHTML = "";
+  } else {
+    if (state.view === "overview") panel.innerHTML = renderOverview();
+    if (state.view === "groups") panel.innerHTML = renderGroups();
+    if (state.view === "ko") panel.innerHTML = renderKO();
+    if (state.view === "leaderboard") panel.innerHTML = renderLeaderboardView();
+    if (state.view === "stats") panel.innerHTML = renderStatsView();
+  }
+
+  if (!isContestMode) wireMatchButtons();
+  wireHubControls();
+}
 
 function renderPostSubmissionHub(){
   return `
     <div class="tabs">
-      <div class="tab ${state.hubTab==="dashboard"?"active":""}" data-hubtab="dashboard">Matchs (passés/en cours/avenir)</div>
-      <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
-      <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement général</div>
+      <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
       <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
+      <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Mes pronos</div>
     </div>
-    ${state.hubTab === "dashboard" ? renderMatchStatusBoard() : ""}
-    ${state.hubTab === "myPicks" ? renderBracketTable(currentUser()) : ""}
     ${state.hubTab === "leaderboard" ? renderLeaderboardView() : ""}
     ${state.hubTab === "stats" ? renderStatsView() : ""}
+    ${state.hubTab === "myPicks" ? renderPicksTable(currentUser(), "Moi") : ""}
   `;
-}
-
-function renderMatchStatusBoard(){
-  const now = new Date();
-  const all = [...state.matches.groupStage, ...state.matches.knockout].sort((a, b) => a.id - b.id);
-  const passed = [];
-  const live = [];
-  const upcoming = [];
-  for (const m of all){
-    const dt = buildMatchDate(m);
-    if (!dt) {
-      upcoming.push(m);
-      continue;
-    }
-    const diff = dt.getTime() - now.getTime();
-    if (diff < -2 * 60 * 60 * 1000) passed.push(m);
-    else if (Math.abs(diff) <= 2 * 60 * 60 * 1000) live.push(m);
-    else upcoming.push(m);
-  }
-  return `
-    <h2>Matchs passés, en cours et à venir</h2>
-    ${renderMatchList("En cours", live)}
-    ${renderMatchList("À venir", upcoming.slice(0, 15))}
-    ${renderMatchList("Passés", passed.slice(-15).reverse())}
-  `;
-}
-
-  const panel = document.getElementById("panel");
-  if (state.view === "overview") panel.innerHTML = renderOverview();
-  if (state.view === "groups") panel.innerHTML = renderGroups();
-  if (state.view === "ko") panel.innerHTML = renderKO();
-  if (state.view === "leaderboard") panel.innerHTML = renderLeaderboardView();
-  if (state.view === "stats") panel.innerHTML = renderStatsView();
-
-  wireMatchButtons();
-  wireHubControls();
 }
 
 function renderOverview(){
   const groups = state.teams.groups;
   const u = currentUser();
   const standings = computeGroupStandingsFromPicks(u);
+  const teamRows = groups.map((g) => {
+    const rows = (standings[g] || []).slice(0, 4);
+    return `
+      <article class="group-card">
+        <h3>Group ${escapeHtml(g)}</h3>
+        <div class="group-team-list">
+          ${rows.map((r) => `
+            <div class="group-team-row">
+              <span class="flag">${getTeamFlag(r.team)}</span>
+              <span class="group-team-name">${escapeHtml(r.team)}</span>
+              <span class="group-team-points">${r.pts} pts</span>
+            </div>
+          `).join("")}
+        </div>
+      </article>
+    `;
+  }).join("");
   return `
     <div class="grid two">
       <section>
         <h2>Récapitulatif des poules</h2>
-        ${groups.map((g) => {
-          const rows = (standings[g] || []).slice(0, 4);
-          return `
-            <div class="hr"></div>
-            <h3>Groupe ${g}</h3>
-            <div class="mini-table">
-              ${rows.map((r, idx) => `
-                <div><b>${idx + 1}.</b> ${escapeHtml(r.team)}</div>
-                <div>${r.pts} pts</div>
-              `).join("")}
-            </div>
-          `;
-        }).join("")}
+        <div class="groups-visual-grid">${teamRows}</div>
       </section>
       <section>
         <h2>Tableau final (dates & lieux)</h2>
@@ -698,7 +685,7 @@ function submitTieBreaker(){
   }
   u.tieBreakerSubmittedAt = new Date().toISOString();
   state.selectedLeaderboardUserKey = userKey(u.profile);
-  state.hubTab = "dashboard";
+  state.hubTab = "leaderboard";
   saveAll();
   render();
 }
@@ -861,6 +848,58 @@ function normalizeName(value){
     .trim();
 }
 
+function getTeamFlag(teamName){
+  const key = normalizeName(teamName);
+  const flags = {
+    mexico: "🇲🇽",
+    "south africa": "🇿🇦",
+    "korea republic": "🇰🇷",
+    canada: "🇨🇦",
+    qatar: "🇶🇦",
+    switzerland: "🇨🇭",
+    brazil: "🇧🇷",
+    morocco: "🇲🇦",
+    haiti: "🇭🇹",
+    scotland: "🏴",
+    usa: "🇺🇸",
+    paraguay: "🇵🇾",
+    australia: "🇦🇺",
+    germany: "🇩🇪",
+    curacao: "🇨🇼",
+    "cote d’ivoire": "🇨🇮",
+    "cote d'ivoire": "🇨🇮",
+    ecuador: "🇪🇨",
+    netherlands: "🇳🇱",
+    japan: "🇯🇵",
+    tunisia: "🇹🇳",
+    belgium: "🇧🇪",
+    egypt: "🇪🇬",
+    "ir iran": "🇮🇷",
+    "new zealand": "🇳🇿",
+    spain: "🇪🇸",
+    "cabo verde": "🇨🇻",
+    "saudi arabia": "🇸🇦",
+    uruguay: "🇺🇾",
+    france: "🇫🇷",
+    senegal: "🇸🇳",
+    norway: "🇳🇴",
+    argentina: "🇦🇷",
+    algeria: "🇩🇿",
+    austria: "🇦🇹",
+    jordan: "🇯🇴",
+    portugal: "🇵🇹",
+    uzbekistan: "🇺🇿",
+    colombia: "🇨🇴",
+    england: "🏴",
+    croatia: "🇭🇷",
+    ghana: "🇬🇭",
+    panama: "🇵🇦"
+  };
+  if (flags[key]) return flags[key];
+  if (key.startsWith("winner play-off")) return "🟦";
+  return "⚽";
+}
+
 function getMatchById(id){
   return [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])]
     .find((m) => Number(m.id) === Number(id));
@@ -1004,6 +1043,12 @@ function pickLoserName(matchId, userData){
 }
 
 function wireHubControls(){
+  for (const el of document.querySelectorAll("[data-view]")){
+    el.onclick = () => {
+      state.view = el.dataset.view;
+      render();
+    };
+  }
   for (const el of document.querySelectorAll("[data-hubtab]")){
     el.onclick = () => {
       state.hubTab = el.dataset.hubtab;

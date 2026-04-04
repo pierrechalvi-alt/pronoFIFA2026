@@ -226,6 +226,44 @@ code{color:#1d3a85}
   font-size:13px;
 }
 
+.groups-visual-grid{
+  display:grid;
+  gap:10px;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+}
+.group-card{
+  background:linear-gradient(160deg,#051237,#0c2256 65%,#0b1f46);
+  border:1px solid rgba(80,120,255,.35);
+  border-radius:16px;
+  padding:10px;
+}
+.group-card h3{
+  color:#fff;
+  margin:0 0 8px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  font-size:14px;
+}
+.group-team-list{display:flex;flex-direction:column;gap:7px}
+.group-team-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:#fff;
+  border-radius:999px;
+  padding:6px 10px;
+  font-weight:700;
+  color:#13223e;
+}
+.flag{font-size:18px;line-height:1}
+.group-team-name{
+  flex:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.group-team-points{font-size:12px;color:#40527d}
+
 .leaderboard-table{
   width:100%;
   border-collapse:collapse;
