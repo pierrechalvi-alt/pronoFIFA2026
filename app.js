@@ -464,6 +464,7 @@ async function sendPasswordReminder(password, userLabel){
 
 function pick(matchId, val){
   const u = currentUser();
+  if (!u) return;
   const match = getMatchById(matchId);
   if (!match) return;
   if (isFlashLocked(u)) {
@@ -483,6 +484,7 @@ function pick(matchId, val){
 
 function setBonusGoals(val){
   const u = currentUser();
+  if (!u) return;
   if (!u.finalSubmittedAt || u.tieBreakerSubmittedAt) return;
   u.bonusGoals = val === "" ? null : Number(val);
   saveAll();
@@ -490,6 +492,7 @@ function setBonusGoals(val){
 
 function setQualifier(group, which, team){
   const u = currentUser();
+  if (!u) return;
   if (!u.qualifiers[group]) u.qualifiers[group] = { first:null, second:null };
   u.qualifiers[group][which] = team || null;
   saveAll();
