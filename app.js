@@ -99,13 +99,15 @@ function buildGroupStageMatches(teams, providedGroup){
       const provided = providedById.get(id);
       const generatedHome = teamList[homeIdx];
       const generatedAway = teamList[awayIdx];
+      const home = resolveGroupTeamLabel(provided?.home, generatedHome, teamList);
+      const away = resolveGroupTeamLabel(provided?.away, generatedAway, teamList);
 
       groupStage.push({
         id,
         stage: "GROUP",
         group,
-        home: isPlaceholderTeam(provided?.home) ? generatedHome : provided.home,
-        away: isPlaceholderTeam(provided?.away) ? generatedAway : provided.away,
+        home,
+        away,
         date: provided?.date ?? null,
         time: provided?.time ?? null,
         city: provided?.city ?? null,
@@ -116,6 +118,18 @@ function buildGroupStageMatches(teams, providedGroup){
     }
   }
   return groupStage;
+}
+
+function resolveGroupTeamLabel(providedTeam, generatedTeam, groupTeams){
+  if (isPlaceholderTeam(providedTeam)) return generatedTeam;
+  if (!isTeamInGroup(providedTeam, groupTeams)) return generatedTeam;
+  return providedTeam;
+}
+
+function isTeamInGroup(teamName, groupTeams){
+  const provided = normalizeName(teamName);
+  if (!provided) return false;
+  return groupTeams.some((team) => normalizeName(team) === provided);
 }
 
 function isPlaceholderTeam(name){
