@@ -236,8 +236,8 @@ input:focus, select:focus, textarea:focus{border-color: #0c59cf; box-shadow: 0 0
   background: #fff;
   align-items:center;
 }
-.match-duel{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;text-align:center}
-.team-chip{font-weight:800;display:inline-flex;align-items:center;gap:6px}
+.match-duel{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;justify-content:center;gap:8px;text-align:center}
+.team-chip{font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0}
 .vs-chip{font-size:11px;font-weight:900;color:#374151;border:1px solid #d1d5db;border-radius:999px;padding:2px 8px}
 .meta{font-size:11px;color:var(--muted);text-align:center}
 .picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
@@ -252,7 +252,6 @@ input:focus, select:focus, textarea:focus{border-color: #0c59cf; box-shadow: 0 0
 }
 .pick.active{border-color: #0c59cf;background: #e8f0ff}
 .pick:disabled{opacity:.45;cursor:not-allowed}
-.picks-visual{justify-content:flex-end;gap:8px;max-width:420px}
 .pick-label{min-width:160px;max-width:100%;padding:8px 10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .flow-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:8px}
@@ -283,7 +282,7 @@ code{color:#0c59cf}
 .bracket-funnel{display:grid;gap:10px}
 .funnel-round{display:grid;gap:8px}
 .funnel-round h3{margin:0;font-size:13px;color:#374151;text-transform:uppercase;letter-spacing:.5px}
-.funnel-match{display:grid;gap:6px;border:1px solid var(--line);border-radius:14px;padding:10px;background:var(--card-strong)}
+.funnel-match{display:grid;gap:8px;border:1px solid var(--line);border-radius:14px;padding:10px;background:var(--card-strong)}
 
 .player-row{
   width:100%;
@@ -317,12 +316,15 @@ code{color:#0c59cf}
 .leaderboard-table tbody tr:hover{background:#f5f7fa}
 .leaderboard-table tbody tr.active{background:#e8f0ff}
 
-.match-card{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:8px;text-align:center}
+.match-card{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);justify-content:center;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:8px;text-align:center}
 .match-card span,.match-card b{min-width:0}
+.team-col{display:inline-flex;align-items:center;justify-content:center}
+.vs-col{justify-self:center}
 
 @media (max-width: 760px){
   .match{grid-template-columns: 1fr;gap:8px}
-  .picks{justify-content:flex-start}
+  .picks{justify-content:center}
+  .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
   .container{padding-top:16px}
 }
