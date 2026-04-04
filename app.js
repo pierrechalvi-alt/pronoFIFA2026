@@ -290,6 +290,12 @@ function resolveCommunityApiBase(){
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
   const explicitLocalStorage = readStorageItem("fwc26_community_api");
   const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  if (!raw) {
+    if (window?.location?.protocol === "http:" || window?.location?.protocol === "https:") {
+      return window.location.origin;
+    }
+    return "";
+  }
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }

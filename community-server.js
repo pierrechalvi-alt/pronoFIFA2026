@@ -5,6 +5,7 @@ const path = require("path");
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const DB_FILE = process.env.COMMUNITY_DB_FILE || path.join(__dirname, "data", "community-sync.json");
+const WEB_ROOT = process.env.COMMUNITY_WEB_ROOT || __dirname;
 
 let snapshotState = {
   updatedAt: 0,
@@ -68,12 +69,17 @@ function boot(){
       return;
     }
 
+    if (req.method === "GET" || req.method === "HEAD") {
+      return serveStatic(req, res);
+    }
+
     sendJson(res, 404, { ok: false, error: "not_found" });
   });
 
   server.listen(PORT, HOST, () => {
     console.log(`Community sync server running on http://${HOST}:${PORT}`);
     console.log(`Snapshot file: ${DB_FILE}`);
+    console.log(`Web root: ${WEB_ROOT}`);
   });
 }
 
@@ -142,5 +148,39 @@ function broadcast(payload){
     } catch {
       clients.delete(client);
     }
+  }
+}
+
+function serveStatic(req, res){
+  const rawUrl = req.url === "/" ? "/index.html" : req.url;
+  const pathname = decodeURIComponent(rawUrl.split("?")[0]);
+  const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+  const absolutePath = path.join(WEB_ROOT, safePath);
+
+  if (!absolutePath.startsWith(path.normalize(WEB_ROOT + path.sep))) {
+    return sendJson(res, 403, { ok: false, error: "forbidden" });
+  }
+  if (!fs.existsSync(absolutePath) || fs.statSync(absolutePath).isDirectory()) {
+    return sendJson(res, 404, { ok: false, error: "not_found" });
+  }
+  const mime = getMimeType(absolutePath);
+  res.writeHead(200, { "Content-Type": mime });
+  if (req.method === "HEAD") return res.end();
+  fs.createReadStream(absolutePath).pipe(res);
+}
+
+function getMimeType(filePath){
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case ".html": return "text/html; charset=utf-8";
+    case ".js": return "application/javascript; charset=utf-8";
+    case ".css": return "text/css; charset=utf-8";
+    case ".json": return "application/json; charset=utf-8";
+    case ".svg": return "image/svg+xml";
+    case ".png": return "image/png";
+    case ".jpg":
+    case ".jpeg": return "image/jpeg";
+    case ".webmanifest": return "application/manifest+json; charset=utf-8";
+    default: return "application/octet-stream";
   }
 }
