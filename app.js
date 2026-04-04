@@ -347,7 +347,6 @@ function render(){
     ? `<button class="profile-trigger" id="profileTrigger" title="Cliquer pour ajouter une photo">
          ${renderAvatar(state.me.profilePhoto, `${state.me.firstName} ${state.me.lastName}`)}
          <span class="user-name">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
-         <span class="badge">${escapeHtml(state.me.firstName)} ${escapeHtml(state.me.lastName)}${state.me.nickname ? ` (${escapeHtml(state.me.nickname)})` : ""}</span>
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
@@ -549,7 +548,7 @@ function renderTournamentHub(){
         <div class="tab ${state.hubTab==="leaderboard"?"active":""}" data-hubtab="leaderboard">Classement</div>
         <div class="tab ${state.hubTab==="stats"?"active":""}" data-hubtab="stats">Statistiques</div>
         <div class="tab ${state.hubTab==="myPicks"?"active":""}" data-hubtab="myPicks">Ma grille</div>
-        <div class="tab ${state.hubTab==="thirdHalf"?"active":""}" data-hubtab="thirdHalf">3ème mi-temps</div>
+        <div class="tab ${state.hubTab==="thirdHalf"?"active":""}" data-hubtab="thirdHalf">Le Bistro</div>
       </div>
       ${state.hubTab === "matches" ? renderTournamentMatchesCenter() : ""}
       ${state.hubTab === "matches" ? `<div class="hr"></div>` : ""}
@@ -795,7 +794,7 @@ function renderStatsView(){
 function renderThirdHalfView(){
   const comments = getThirdHalfComments();
   return `
-    <h2>3ème mi-temps</h2>
+    <h2>Le Bistro</h2>
     <p>Laisse un commentaire, ajoute une photo et réagis aux posts des autres 🔥</p>
     <div class="card" style="padding:12px; margin-bottom:12px">
       <div class="field">
@@ -849,10 +848,6 @@ function renderTournamentMatchesCenter(){
           <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
         </div>
         ${!withScore ? `<div class="meta">${escapeHtml(schedule || "Date/heure à confirmer")}</div>` : ""}
-      <div class="match-card">
-        <span class="team-col">${getTeamFlag(info.homeLabel)} ${escapeHtml(info.homeLabel)}</span>
-        <b class="vs-col">${withScore ? `${m.scoreHome} - ${m.scoreAway}` : "vs"}</b>
-        <span class="team-col">${getTeamFlag(info.awayLabel)} ${escapeHtml(info.awayLabel)}</span>
       </div>
     `;
   }).join("") : `<small>Aucun match pour le moment.</small>`;
@@ -1190,7 +1185,6 @@ function renderCalendar(){
 
 function renderPicksTable(userData, label, options = {}){
   const title = options.title || `Les pronos de ${label}`;
-function renderPicksTable(userData, label){
   const groupMatches = (state.matches.groupStage || []).slice().sort((a, b) => a.id - b.id);
   const groupedByLetter = new Map();
   for (const m of groupMatches){
@@ -1200,27 +1194,21 @@ function renderPicksTable(userData, label){
 
   const groupBlocks = [...groupedByLetter.entries()].map(([group, matches]) => `
     <article class="group-card pick-group-card">
-    <article class="group-card">
       <h3>Groupe ${escapeHtml(group)}</h3>
       <div class="group-team-list">
         ${matches.map((m) => {
           const teams = getMatchDisplayTeams(userData, m);
+          const homeTeamLabel = formatTeamShortName(teams.homeLabel);
+          const awayTeamLabel = formatTeamShortName(teams.awayLabel);
           const pickValue = userData.picks?.[String(m.id)] || "-";
           const homeWinnerClass = pickValue === "H" ? "predicted-winner" : "";
           const awayWinnerClass = pickValue === "A" ? "predicted-winner" : "";
           const drawClass = pickValue === "D" ? "predicted-draw" : "";
           return `
             <div class="group-team-row pick-duel-row">
-              <span class="group-team-name pick-team-name ${homeWinnerClass}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
+              <span class="group-team-name pick-team-name ${homeWinnerClass}" title="${escapeAttr(teams.homeLabel)}">${getTeamFlag(teams.homeLabel)} ${escapeHtml(homeTeamLabel)}</span>
               <span class="vs-chip ${drawClass}">${pickValue === "D" ? "Nul" : "vs"}</span>
-              <span class="group-team-name pick-team-name ${awayWinnerClass}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
-          const pickLabel = pickValue === "H" ? "1" : pickValue === "A" ? "2" : pickValue === "D" ? "N" : "-";
-          return `
-            <div class="group-team-row">
-              <span class="group-team-name">${getTeamFlag(teams.homeLabel)} ${escapeHtml(teams.homeLabel)}</span>
-              <span class="vs-chip">vs</span>
-              <span class="group-team-name">${getTeamFlag(teams.awayLabel)} ${escapeHtml(teams.awayLabel)}</span>
-              <span class="badge">${pickLabel}</span>
+              <span class="group-team-name pick-team-name ${awayWinnerClass}" title="${escapeAttr(teams.awayLabel)}">${getTeamFlag(teams.awayLabel)} ${escapeHtml(awayTeamLabel)}</span>
             </div>
           `;
         }).join("")}
@@ -1231,9 +1219,8 @@ function renderPicksTable(userData, label){
   return `
     <section>
       <h2>${escapeHtml(title)}</h2>
+      <small>Format compact : 4 colonnes × 3 groupes pour une lecture homogène.</small>
       <div class="groups-visual-grid picks-groups-grid">${groupBlocks}</div>
-      <h2>Vue d'ensemble de la grille — ${escapeHtml(label)}</h2>
-      <div class="groups-visual-grid">${groupBlocks}</div>
     </section>
     <div class="hr"></div>
     <section>
@@ -1291,6 +1278,31 @@ function normalizeName(value){
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function formatTeamShortName(teamName){
+  const raw = String(teamName || "").trim();
+  if (!raw) return "À définir";
+  const normalized = normalizeName(raw);
+  const dictionary = {
+    "etats-unis": "USA",
+    "republique de coree": "Corée",
+    "bosnie-et-herzegovine": "Bosnie",
+    "arabie saoudite": "Arabie",
+    "cote d'ivoire": "Côte d'Ivoire",
+    "nouvelle-zelande": "N.-Zélande",
+    "rd congo": "RD Congo",
+    "angleterre": "England"
+  };
+  if (dictionary[normalized]) return dictionary[normalized];
+  if (raw.length <= 16) return raw;
+  const compact = raw
+    .split(/\s+/)
+    .map((word) => word.replace(/[^A-Za-zÀ-ÿ'-]/g, ""))
+    .filter(Boolean)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+  return compact.length >= 2 ? compact : raw.slice(0, 14);
 }
 
 function getTeamFlag(teamName){

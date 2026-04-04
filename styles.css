@@ -122,6 +122,11 @@ body{
   font-size:12px;
 }
 .userbox .user-name{
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .userbox .badge{
   max-width:240px;
   overflow:hidden;
@@ -293,17 +298,19 @@ code{color:#0c59cf}
 .group-team-points{font-size:12px;color:#b8cfff}
 .picks-groups-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .pick-group-card .group-team-list{gap:8px}
+.pick-group-card .group-team-row{background:#f3f7ff}
 .pick-duel-row{
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);
   gap:8px;
   align-items:center;
 }
 .pick-team-name{
-  white-space:normal;
-  overflow:visible;
-  text-overflow:clip;
-  line-height:1.2;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.1;
+  text-align:center;
 }
 .predicted-winner{
   font-weight:900;
@@ -316,6 +323,11 @@ code{color:#0c59cf}
   border-color:#0c59cf;
   background:#e8f0ff;
   font-weight:900;
+}
+.pick-duel-row .vs-chip{
+  display:inline-flex;
+  justify-content:center;
+  width:100%;
 }
 
 .bracket-funnel{display:grid;gap:10px}
@@ -388,6 +400,8 @@ code{color:#0c59cf}
     justify-self:end;
   }
   .userbox .user-name{
+    display:none;
+  }
   .userbox .badge{
     display:none;
   }
@@ -429,7 +443,7 @@ code{color:#0c59cf}
     padding:8px;
   }
   .pick-duel-row{
-    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);
   }
   .group-team-name{
     font-size:12px;
@@ -448,7 +462,7 @@ code{color:#0c59cf}
 
 @media (min-width: 761px) and (max-width: 1060px){
   .picks-groups-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
   .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
