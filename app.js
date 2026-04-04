@@ -161,6 +161,7 @@ function ensureUser(){
       flashLockedAt: null
     };
   }
+  sanitizeUserPicks(state.data.users[key]);
   state.data.lastUserKey = key;
   saveAll();
   return state.data.users[key];
@@ -1029,6 +1030,21 @@ function getMatchById(id){
     .find((m) => Number(m.id) === Number(id));
 }
 
+function sanitizeUserPicks(userData){
+  if (!userData?.picks || !state.matches) return;
+  const validIds = new Set([
+    ...(state.matches.groupStage || []).map((m) => String(m.id)),
+    ...(state.matches.knockout || []).map((m) => String(m.id))
+  ]);
+  for (const [matchId, value] of Object.entries(userData.picks)){
+    const match = getMatchById(matchId);
+    const isValidPick = value === "H" || value === "A" || (!match || match.stage === "GROUP") && value === "D";
+    if (!validIds.has(String(matchId)) || !isValidPick) {
+      delete userData.picks[matchId];
+    }
+  }
+}
+
 
 function renderBracketColumns(userData){
   const ko = (state.matches.knockout || []).slice().sort((a, b) => a.id - b.id);
@@ -1360,10 +1376,19 @@ function countTotalMatches(){
   const ko = state.matches?.knockout?.length || 0;
   return gs + ko;
 }
-function countPicks(u){ return Object.keys(u.picks || {}).length; }
+function countPicks(u){
+  const allMatches = [...(state.matches?.groupStage || []), ...(state.matches?.knockout || [])];
+  return allMatches.filter((m) => {
+    const pickValue = u.picks?.[String(m.id)];
+    return pickValue === "H" || pickValue === "A" || (m.stage === "GROUP" && pickValue === "D");
+  }).length;
+}
 function countPicksByStage(u, stage){
   const source = stage === "KO" ? state.matches.knockout : state.matches.groupStage;
-  return source.filter(m => u.picks[String(m.id)]).length;
+  return source.filter((m) => {
+    const pickValue = u.picks?.[String(m.id)];
+    return pickValue === "H" || pickValue === "A" || (stage !== "KO" && pickValue === "D");
+  }).length;
 }
 
 function filterMatches(matches){
