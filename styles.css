@@ -296,7 +296,7 @@ code{color:#0c59cf}
 .flag{font-size:18px;line-height:1}
 .group-team-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-team-points{font-size:12px;color:#b8cfff}
-.picks-groups-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.picks-groups-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 .pick-group-card .group-team-list{gap:8px}
 .pick-group-card .group-team-row{background:#f3f7ff}
 .pick-duel-row{
@@ -309,6 +309,8 @@ code{color:#0c59cf}
   white-space:normal;
   overflow:visible;
   text-overflow:clip;
+  word-break:normal;
+  overflow-wrap:anywhere;
   word-break:break-word;
   line-height:1.1;
   text-align:center;
@@ -468,6 +470,12 @@ code{color:#0c59cf}
   .match-duel,.match-card{grid-template-columns:1fr}
   .topbar{padding:14px 14px;align-items:center;flex-direction:column}
   .container{padding-top:16px}
+}
+
+@media (min-width: 1061px) and (max-width: 1320px){
+  .picks-groups-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
 }
 
 .compact-tabs .tab{padding:7px 10px;font-size:12px}
