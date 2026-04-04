@@ -2,6 +2,9 @@ const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
 const LS_KEY = "fwc26_pronos_v1";
+const DB_NAME = "fwc26_pronos_db";
+const DB_STORE = "snapshots";
+const DB_RECORD_ID = "latest";
 
 const state = {
   me: null,
@@ -37,6 +40,9 @@ async function init(){
     `;
     return;
   }
+
+  await hydrateDataStore();
+  requestPersistentStorage();
 
   if (state.data?.lastUserKey) {
     const u = state.data.users?.[state.data.lastUserKey];
@@ -160,17 +166,87 @@ function userKey(profile){
 }
 
 function loadAll(){
-  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] } };
+  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
     const parsed = JSON.parse(localStorage.getItem(LS_KEY)) || fallback;
-    if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
-      parsed.thirdHalf = { comments:[] };
-    }
-    return parsed;
+    return normalizeDataShape(parsed);
   }
   catch { return fallback; }
 }
-function saveAll(){ localStorage.setItem(LS_KEY, JSON.stringify(state.data)); }
+function normalizeDataShape(raw){
+  const parsed = raw && typeof raw === "object" ? raw : {};
+  if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
+    parsed.thirdHalf = { comments:[] };
+  }
+  if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
+  if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  return parsed;
+}
+
+async function hydrateDataStore(){
+  const localData = normalizeDataShape(state.data);
+  const indexedData = await loadAllFromIndexedDB();
+  if (!indexedData) {
+    state.data = localData;
+    return;
+  }
+  const pickIndexed = Number(indexedData.updatedAt || 0) > Number(localData.updatedAt || 0);
+  state.data = pickIndexed ? indexedData : localData;
+  if (pickIndexed) saveAll();
+}
+
+function saveAll(){
+  state.data.updatedAt = Date.now();
+  localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+  saveAllToIndexedDB(state.data);
+}
+
+function openPronosDb(){
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) return resolve(null);
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadAllFromIndexedDB(){
+  try {
+    const db = await openPronosDb();
+    if (!db) return null;
+    return await new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const store = tx.objectStore(DB_STORE);
+      const req = store.get(DB_RECORD_ID);
+      req.onsuccess = () => resolve(normalizeDataShape(req.result?.payload || null));
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function saveAllToIndexedDB(payload){
+  try {
+    const db = await openPronosDb();
+    if (!db) return;
+    await new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put({ id: DB_RECORD_ID, payload });
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  } catch {}
+}
+
+function requestPersistentStorage(){
+  if (!navigator?.storage?.persist) return;
+  navigator.storage.persist().catch(() => {});
+}
 
 function ensureUser(){
   const key = userKey(state.me);
@@ -210,6 +286,25 @@ function logout(){
   state.data.lastUserKey = null;
   saveAll();
   render();
+}
+
+async function sendPasswordReminder(password, userLabel){
+  const message = password
+    ? `Mot de passe enregistré pour ${userLabel} : ${password}`
+    : `Aucun mot de passe enregistré pour ${userLabel}.`;
+  if (typeof Notification !== "undefined") {
+    try {
+      if (Notification.permission === "granted") {
+        new Notification("Rappel mot de passe", { body: message });
+      } else if (Notification.permission !== "denied") {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          new Notification("Rappel mot de passe", { body: message });
+        }
+      }
+    } catch {}
+  }
+  alert(message);
 }
 
 function pick(matchId, val){
@@ -276,52 +371,97 @@ function render(){
 
 function renderWelcome(){
   APP.innerHTML = `
-    <section class="card auth-card">
-      <h1>Première connexion</h1>
-      <p>Entre ton nom, prénom et un mot de passe pour ta prochaine connexion.</p>
-      <div class="row">
-        <div class="field">
-          <label>Prénom</label>
-          <input id="firstName" placeholder="Ex: Karim" autocomplete="given-name" />
+    <section class="grid two">
+      <article class="card auth-card">
+        <h1>Première connexion</h1>
+        <p>Entre ton nom, prénom et un mot de passe pour créer ton compte.</p>
+        <div class="row">
+          <div class="field">
+            <label>Prénom</label>
+            <input id="signupFirstName" placeholder="Ex: Karim" autocomplete="given-name" />
+          </div>
+          <div class="field">
+            <label>Nom</label>
+            <input id="signupLastName" placeholder="Ex: Benzema" autocomplete="family-name" />
+          </div>
         </div>
-        <div class="field">
-          <label>Nom</label>
-          <input id="lastName" placeholder="Ex: Benzema" autocomplete="family-name" />
+        <div class="row">
+          <div class="field">
+            <label>Mot de passe</label>
+            <input id="signupPassword" type="password" placeholder="••••••••" autocomplete="new-password" />
+          </div>
         </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Mot de passe</label>
-          <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="signupBtn">Entrer dans le tournoi</button>
         </div>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn primary" id="authBtn">Entrer dans le tournoi</button>
-      </div>
-      <small>Si ton profil existe déjà, saisis le même nom/prénom + mot de passe pour te reconnecter.</small>
+      </article>
+      <article class="card auth-card">
+        <h1>Ah mais t'es là toi</h1>
+        <p>Reconnecte-toi avec ton nom, prénom et mot de passe.</p>
+        <div class="row">
+          <div class="field">
+            <label>Prénom</label>
+            <input id="loginFirstName" placeholder="Ex: Karim" autocomplete="given-name" />
+          </div>
+          <div class="field">
+            <label>Nom</label>
+            <input id="loginLastName" placeholder="Ex: Benzema" autocomplete="family-name" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Mot de passe</label>
+            <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="loginBtn">J'y retourne</button>
+          <button class="btn alt" id="forgotPwdBtn" type="button">Mot de passe oublié ?</button>
+        </div>
+      </article>
     </section>
+    <small>Les comptes sont uniques : même prénom + nom = même compte.</small>
   `;
-  document.getElementById("authBtn").onclick = () => {
-    const firstName = document.getElementById("firstName").value.trim();
-    const lastName  = document.getElementById("lastName").value.trim();
-    const password = document.getElementById("password").value;
+
+  document.getElementById("signupBtn").onclick = () => {
+    const firstName = document.getElementById("signupFirstName").value.trim();
+    const lastName  = document.getElementById("signupLastName").value.trim();
+    const password = document.getElementById("signupPassword").value;
     if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
     const profile = { firstName, lastName, nickname: "" };
     const key = userKey(profile);
     const existing = state.data.users?.[key];
-    if (existing) {
-      if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
-      state.me = existing.profile;
-      state.onboardingStep = "app";
-      state.data.lastUserKey = key;
-      saveAll();
-      render();
-      return;
-    }
+    if (existing) return alert("Ce compte existe déjà. Utilise “J'y retourne” pour te reconnecter.");
     setUser(profile);
     state.data.users[key].password = password;
     saveAll();
     render();
+  };
+
+  document.getElementById("loginBtn").onclick = () => {
+    const firstName = document.getElementById("loginFirstName").value.trim();
+    const lastName  = document.getElementById("loginLastName").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    if (!firstName || !lastName || !password) return alert("Merci de compléter prénom, nom et mot de passe.");
+    const key = userKey({ firstName, lastName });
+    const existing = state.data.users?.[key];
+    if (!existing) return alert("Nom/prénom inconnu. Vérifie la saisie (majuscules/minuscules ignorées).");
+    if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
+    state.me = existing.profile;
+    state.onboardingStep = "app";
+    state.data.lastUserKey = key;
+    saveAll();
+    render();
+  };
+
+  document.getElementById("forgotPwdBtn").onclick = () => {
+    const firstName = document.getElementById("loginFirstName").value.trim();
+    const lastName  = document.getElementById("loginLastName").value.trim();
+    if (!firstName || !lastName) return alert("Indique d'abord prénom + nom pour retrouver ton mot de passe.");
+    const key = userKey({ firstName, lastName });
+    const existing = state.data.users?.[key];
+    if (!existing) return alert("Nom/prénom inconnu. Impossible de retrouver le mot de passe.");
+    sendPasswordReminder(existing.password || "", `${firstName} ${lastName}`);
   };
 }
 
