@@ -13,6 +13,7 @@ let syncChannel = null;
 let communityStream = null;
 let communitySyncTimer = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
+const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
 
 const state = {
@@ -91,11 +92,20 @@ function resolveCanonicalAppOrigin(){
 }
 
 function enforceCanonicalAppOrigin(){
+  if (CANONICAL_REDIRECT_DISABLED) return false;
   if (!CANONICAL_APP_ORIGIN || !window?.location?.origin) return false;
   if (window.location.origin === CANONICAL_APP_ORIGIN) return false;
   const redirectUrl = `${CANONICAL_APP_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`;
   window.location.replace(redirectUrl);
   return true;
+}
+
+function isCanonicalRedirectDisabled(){
+  const explicitMeta = document.querySelector('meta[name="fwc26-disable-canonical-redirect"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_DISABLE_CANONICAL_REDIRECT__ : null;
+  const explicitLocalStorage = readStorageItem("fwc26_disable_canonical_redirect");
+  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
 async function fetchJson(url){
