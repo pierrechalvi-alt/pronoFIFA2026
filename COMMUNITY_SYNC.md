@@ -156,3 +156,20 @@ Ensuite, refaire un test :
 
 - Snapshot partagé persistant dans `data/community-sync.json`.
 - CORS ouvert (`*`) pour simplifier LAN/tests.
+
+## Oui/non : qu'est-ce qui est partagé entre amis ?
+
+**Oui, théoriquement et pratiquement ça fonctionne**, si les prérequis ci-dessus sont respectés (même URL front + même endpoint API + backend `ok`).
+
+Quand c'est bien configuré :
+
+- ✅ Tu crées ton profil → ton ami te voit dans le **classement**.
+- ✅ Ton ami peut ouvrir ta **grille** (lecture) depuis l'onglet classement.
+- ✅ Vous échangez tous les deux dans le **Bistro / 3e mi-temps** (messages communs).
+
+Ce qui ferait croire que "ça ne marche pas" :
+
+- ❌ Un téléphone utilise une autre URL front.
+- ❌ Un téléphone pointe vers un autre endpoint API.
+- ❌ Le backend n'est pas accessible (`/api/health` KO).
+- ❌ Une vieille PWA garde un ancien cache (forcer reload / réinstaller).
