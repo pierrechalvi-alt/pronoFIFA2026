@@ -95,6 +95,50 @@ node community-server.js
 - Vérifier que `GET /api/snapshot` renvoie un snapshot commun.
 - S'assurer que les deux téléphones affichent le même endpoint (bannière "Synchronisation communauté" dans l'app).
 
+### Checklist ultra-simple (à faire en 3 minutes)
+
+1. **Même URL front pour tout le monde**
+   - Demander à chaque personne d'ouvrir l'app puis d'afficher l'URL complète dans le navigateur.
+   - L'URL doit être strictement identique (même domaine + même chemin), par ex :
+     `https://pierrechalvi-alt.github.io/pronoFIFA2026/`
+   - Si une personne ouvre une autre URL (ex: autre domaine, autre chemin, ancien favori), elle sera isolée.
+
+2. **Même endpoint API dans la bannière**
+   - Dans l'app, regarder la carte **Synchronisation communauté**.
+   - La ligne `Endpoint API : ...` doit afficher exactement la même valeur sur tous les appareils.
+   - Valeur attendue pour votre config actuelle :
+     `https://pronofifa2026-community.onrender.com`
+
+3. **Backend disponible (attention: c'est `/api/health`, pas `/api/healt`)**
+   - Depuis n'importe quel navigateur :
+     `https://pronofifa2026-community.onrender.com/api/health`
+   - Réponse attendue (JSON) : `{"ok":true,...}`
+   - En terminal :
+     ```bash
+     curl -i https://pronofifa2026-community.onrender.com/api/health
+     ```
+   - Tu dois voir un statut HTTP `200`.
+
+4. **Test réel de partage**
+   - Téléphone A : modifier un pronostic.
+   - Téléphone B : recharger la page.
+   - Le changement doit apparaître.
+
+## Si les utilisateurs restent "isolés" (cas fréquent)
+
+Le cas le plus courant est un **cache PWA ancien** sur les téléphones (ancien `runtime-config.js`), ce qui fait que l'app continue à utiliser le mode local même si la config a été changée.
+
+Procédure rapide sur chaque téléphone :
+
+1. Ouvrir l'app dans le navigateur (pas l'icône écran d'accueil).
+2. Faire un rechargement forcé.
+3. Vérifier dans la bannière que l'endpoint affiché est bien celui attendu.
+4. Si besoin, supprimer l'app installée de l'écran d'accueil puis la réinstaller.
+
+Ensuite, refaire un test :
+- Téléphone A crée/modifie un pronostic.
+- Téléphone B recharge : la modification doit apparaître.
+
 ## Endpoints exposés
 
 - `GET /api/health`
@@ -112,3 +156,20 @@ node community-server.js
 
 - Snapshot partagé persistant dans `data/community-sync.json`.
 - CORS ouvert (`*`) pour simplifier LAN/tests.
+
+## Oui/non : qu'est-ce qui est partagé entre amis ?
+
+**Oui, théoriquement et pratiquement ça fonctionne**, si les prérequis ci-dessus sont respectés (même URL front + même endpoint API + backend `ok`).
+
+Quand c'est bien configuré :
+
+- ✅ Tu crées ton profil → ton ami te voit dans le **classement**.
+- ✅ Ton ami peut ouvrir ta **grille** (lecture) depuis l'onglet classement.
+- ✅ Vous échangez tous les deux dans le **Bistro / 3e mi-temps** (messages communs).
+
+Ce qui ferait croire que "ça ne marche pas" :
+
+- ❌ Un téléphone utilise une autre URL front.
+- ❌ Un téléphone pointe vers un autre endpoint API.
+- ❌ Le backend n'est pas accessible (`/api/health` KO).
+- ❌ Une vieille PWA garde un ancien cache (forcer reload / réinstaller).
