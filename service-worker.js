@@ -1,7 +1,8 @@
-const CACHE_NAME = "pronos-fifa-2026-v1";
+const CACHE_NAME = "pronos-fifa-2026-v2";
 const APP_SHELL_URLS = [
   "./",
   "./index.html",
+  "./runtime-config.js",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
@@ -32,6 +33,22 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+  const url = new URL(request.url);
+  const isRuntimeConfig = url.pathname.endsWith("/runtime-config.js") || url.pathname === "/runtime-config.js";
+  if (isRuntimeConfig) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
