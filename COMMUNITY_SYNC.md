@@ -173,3 +173,38 @@ Ce qui ferait croire que "ça ne marche pas" :
 - ❌ Un téléphone pointe vers un autre endpoint API.
 - ❌ Le backend n'est pas accessible (`/api/health` KO).
 - ❌ Une vieille PWA garde un ancien cache (forcer reload / réinstaller).
+
+## Comment s'assurer que la config est correcte ? (checklist de validation)
+
+Fais ces 6 points dans l'ordre :
+
+1. **Vérifier `runtime-config.js`**
+   - Le fichier doit contenir exactement :
+   ```js
+   window.__FWC26_CANONICAL_ORIGIN__ = "https://pierrechalvi-alt.github.io";
+   window.__FWC26_COMMUNITY_API__ = "https://pronofifa2026-community.onrender.com";
+   ```
+
+2. **Vérifier l'URL réellement ouverte par les utilisateurs**
+   - Tous les appareils doivent ouvrir la même URL front :
+   `https://pierrechalvi-alt.github.io/pronoFIFA2026/`
+
+3. **Vérifier la bannière dans l'app**
+   - La carte "Synchronisation communauté" doit afficher :
+   - statut : **Active**
+   - endpoint : `https://pronofifa2026-community.onrender.com`
+
+4. **Vérifier le backend**
+   - Ouvrir :
+   `https://pronofifa2026-community.onrender.com/api/health`
+   - Résultat attendu : JSON avec `"ok": true`
+
+5. **Vérifier que le snapshot est bien commun**
+   - Ouvrir :
+   `https://pronofifa2026-community.onrender.com/api/snapshot`
+   - Vérifier que `updatedAt` augmente après une modification faite depuis un téléphone.
+
+6. **Faire un test croisé**
+   - Téléphone A : créer un profil + faire un pronostic.
+   - Téléphone B : recharger l'app.
+   - Tu dois voir le profil de A dans le classement, sa grille, et les messages Bistro partagés.
