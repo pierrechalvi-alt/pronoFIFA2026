@@ -2,7 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
-const PORT = Number(process.env.PORT || 8787);
+const PORT = Number(process.env.COMMUNITY_PORT || process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const DB_FILE = process.env.COMMUNITY_DB_FILE || path.join(__dirname, "data", "community-sync.json");
 const WEB_ROOT = process.env.COMMUNITY_WEB_ROOT || __dirname;

@@ -11,3 +11,5 @@
 
 window.__FWC26_CANONICAL_ORIGIN__ = "https://pierrechalvi-alt.github.io";
 window.__FWC26_COMMUNITY_API__ = "https://pronofifa2026-community.onrender.com";
+// Optionnel (tests locaux / tunnel) : "true" pour désactiver la redirection canonique.
+// window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";

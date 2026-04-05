@@ -28,6 +28,63 @@ COMMUNITY_PORT=8787 node community-server.js
 
 > Résultat attendu : profils séparés par utilisateur, mais notifications / bistro / classement / grilles partagés pour tout le monde.
 
+## Mode local + Cloudflare Tunnel (recommandé pour tester vite)
+
+Objectif : garder le serveur chez toi (localhost) mais le rendre accessible publiquement avec une URL HTTPS Cloudflare.
+
+### 1) Prérequis à installer
+
+1. **Node.js 20+**
+   - Vérifier : `node -v`
+2. **cloudflared** (client Cloudflare Tunnel)
+   - macOS (Homebrew) : `brew install cloudflared`
+   - Windows (winget) : `winget install Cloudflare.cloudflared`
+   - Linux (Debian/Ubuntu) : `sudo apt-get install cloudflared` (ou package officiel Cloudflare)
+
+### 2) Démarrer le serveur local
+
+Depuis la racine du projet :
+
+```bash
+COMMUNITY_PORT=8787 node community-server.js
+```
+
+⚠️ Le serveur lit maintenant `COMMUNITY_PORT` (ou `PORT`) ; garder `8787` simplifie la suite.
+
+### 3) Exposer le port local avec Cloudflare
+
+Dans un 2e terminal :
+
+```bash
+cloudflared tunnel --url http://localhost:8787
+```
+
+Cloudflare affiche une URL publique du type :
+`https://xxxxx.trycloudflare.com`
+
+### 4) Brancher l'app sur cette URL (copier/coller)
+
+Ouvre `runtime-config.js` et mets exactement :
+
+```js
+window.__FWC26_CANONICAL_ORIGIN__ = "https://xxxxx.trycloudflare.com";
+window.__FWC26_COMMUNITY_API__ = "https://xxxxx.trycloudflare.com";
+window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
+```
+
+Pourquoi `__FWC26_DISABLE_CANONICAL_REDIRECT__` ?
+- En phase locale, ça évite des redirections gênantes si tu ouvres temporairement l'app via une autre URL.
+- En production, remets la redirection canonique active (supprimer la variable ou mettre `false`).
+
+### 5) Tester que tout répond
+
+- Backend : `https://xxxxx.trycloudflare.com/api/health`
+- Front : `https://xxxxx.trycloudflare.com/`
+- Test multi-appareils :
+  1. Téléphone A modifie un pronostic.
+  2. Téléphone B recharge.
+  3. Le changement doit apparaître.
+
 ### Configuration appliquée pour ton URL
 
 URL front finale :
