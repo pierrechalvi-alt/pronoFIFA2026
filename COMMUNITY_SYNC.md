@@ -95,6 +95,21 @@ node community-server.js
 - Vérifier que `GET /api/snapshot` renvoie un snapshot commun.
 - S'assurer que les deux téléphones affichent le même endpoint (bannière "Synchronisation communauté" dans l'app).
 
+## Si les utilisateurs restent "isolés" (cas fréquent)
+
+Le cas le plus courant est un **cache PWA ancien** sur les téléphones (ancien `runtime-config.js`), ce qui fait que l'app continue à utiliser le mode local même si la config a été changée.
+
+Procédure rapide sur chaque téléphone :
+
+1. Ouvrir l'app dans le navigateur (pas l'icône écran d'accueil).
+2. Faire un rechargement forcé.
+3. Vérifier dans la bannière que l'endpoint affiché est bien celui attendu.
+4. Si besoin, supprimer l'app installée de l'écran d'accueil puis la réinstaller.
+
+Ensuite, refaire un test :
+- Téléphone A crée/modifie un pronostic.
+- Téléphone B recharge : la modification doit apparaître.
+
 ## Endpoints exposés
 
 - `GET /api/health`
