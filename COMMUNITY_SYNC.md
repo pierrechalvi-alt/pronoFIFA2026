@@ -198,6 +198,46 @@ Fais ces 6 points dans l'ordre :
    - Ouvrir :
    `https://pronofifa2026-community.onrender.com/api/health`
    - Résultat attendu : JSON avec `"ok": true`
+   - Si ton hébergeur réécrit les routes, teste aussi :
+   `https://pronofifa2026-community.onrender.com/health`
+   - Si tu as `not found`, ce n'est **pas normal** :
+     - le service Render ne tourne probablement pas le fichier `community-server.js`,
+     - ou l'ancienne version est encore déployée,
+     - ou l'URL pointe vers le mauvais service Render.
+
+### Diagnostic rapide si `/api/health` renvoie `not found`
+
+1. Ouvre `https://pronofifa2026-community.onrender.com/`
+   - attendu : un JSON du type `{ ok: true, service: "pronoFIFA2026-community", endpoints: [...] }`
+   - si ce JSON n'apparaît pas, le mauvais service (ou mauvais code) est déployé.
+
+2. Vérifie la config Render :
+   - **Start Command** : `node community-server.js`
+   - **Root Directory** : racine du repo `pronoFIFA2026` (pas un sous-dossier vide)
+   - **Deploy branch** : la branche qui contient ce correctif
+
+3. Relance un déploiement manuel (Clear build cache + Deploy latest commit), puis reteste :
+   - `/api/health`
+   - `/health`
+
+### Est-ce que tout peut être généré automatiquement ici ?
+
+**Partiellement seulement.**
+
+- ✅ Ce repo contient déjà ce qu'il faut côté code (`community-server.js`, `render.yaml`, routes `/api/*`).
+- ❌ Le déploiement Render final (cliquer "Deploy", vérifier l'URL publique, changer les variables de service) doit être fait dans **ton compte Render**.
+
+En pratique, si tu as encore `not found`, la manip à faire est côté Render :
+
+1. Ouvrir le service `pronofifa2026-community` dans Render.
+2. Vérifier :
+   - Runtime = Node
+   - Start Command = `node community-server.js`
+   - Branch = celle qui contient les derniers commits
+3. Cliquer **Manual Deploy** → **Clear build cache & deploy**.
+4. Attendre "Live", puis tester :
+   - `https://pronofifa2026-community.onrender.com/`
+   - `https://pronofifa2026-community.onrender.com/api/health`
 
 5. **Vérifier que le snapshot est bien commun**
    - Ouvrir :
