@@ -19,20 +19,21 @@ function boot(){
   snapshotState = loadSnapshot();
   const server = http.createServer(async (req, res) => {
     setCors(res);
+    const pathname = getPathname(req.url);
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       return res.end();
     }
 
-    if (req.url === "/api/health" && req.method === "GET") {
+    if (isPath(pathname, ["/api/health", "/health"]) && req.method === "GET") {
       return sendJson(res, 200, { ok: true, updatedAt: snapshotState.updatedAt });
     }
 
-    if (req.url === "/api/snapshot" && req.method === "GET") {
+    if (isPath(pathname, ["/api/snapshot", "/snapshot"]) && req.method === "GET") {
       return sendJson(res, 200, snapshotState);
     }
 
-    if (req.url === "/api/snapshot" && req.method === "POST") {
+    if (isPath(pathname, ["/api/snapshot", "/snapshot"]) && req.method === "POST") {
       const body = await readBody(req);
       const parsed = safeJsonParse(body);
       if (!parsed || typeof parsed !== "object" || !parsed.snapshot) {
@@ -54,7 +55,7 @@ function boot(){
       return sendJson(res, 200, { ok: true, updatedAt: snapshotState.updatedAt });
     }
 
-    if (req.url === "/api/stream" && req.method === "GET") {
+    if (isPath(pathname, ["/api/stream", "/stream"]) && req.method === "GET") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -69,6 +70,14 @@ function boot(){
       return;
     }
 
+    if (isPath(pathname, ["/"]) && req.method === "GET") {
+      return sendJson(res, 200, {
+        ok: true,
+        service: "pronoFIFA2026-community",
+        endpoints: ["/api/health", "/api/snapshot", "/api/stream"]
+      });
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(req, res);
     }
@@ -81,6 +90,18 @@ function boot(){
     console.log(`Snapshot file: ${DB_FILE}`);
     console.log(`Web root: ${WEB_ROOT}`);
   });
+}
+
+function getPathname(urlValue){
+  try {
+    return new URL(urlValue || "/", "http://localhost").pathname;
+  } catch {
+    return "/";
+  }
+}
+
+function isPath(pathname, candidates){
+  return candidates.includes(pathname) || candidates.includes(pathname.endsWith("/") ? pathname.slice(0, -1) : pathname);
 }
 
 function setCors(res){
