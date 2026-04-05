@@ -95,6 +95,35 @@ node community-server.js
 - Vérifier que `GET /api/snapshot` renvoie un snapshot commun.
 - S'assurer que les deux téléphones affichent le même endpoint (bannière "Synchronisation communauté" dans l'app).
 
+### Checklist ultra-simple (à faire en 3 minutes)
+
+1. **Même URL front pour tout le monde**
+   - Demander à chaque personne d'ouvrir l'app puis d'afficher l'URL complète dans le navigateur.
+   - L'URL doit être strictement identique (même domaine + même chemin), par ex :
+     `https://pierrechalvi-alt.github.io/pronoFIFA2026/`
+   - Si une personne ouvre une autre URL (ex: autre domaine, autre chemin, ancien favori), elle sera isolée.
+
+2. **Même endpoint API dans la bannière**
+   - Dans l'app, regarder la carte **Synchronisation communauté**.
+   - La ligne `Endpoint API : ...` doit afficher exactement la même valeur sur tous les appareils.
+   - Valeur attendue pour votre config actuelle :
+     `https://pronofifa2026-community.onrender.com`
+
+3. **Backend disponible (attention: c'est `/api/health`, pas `/api/healt`)**
+   - Depuis n'importe quel navigateur :
+     `https://pronofifa2026-community.onrender.com/api/health`
+   - Réponse attendue (JSON) : `{"ok":true,...}`
+   - En terminal :
+     ```bash
+     curl -i https://pronofifa2026-community.onrender.com/api/health
+     ```
+   - Tu dois voir un statut HTTP `200`.
+
+4. **Test réel de partage**
+   - Téléphone A : modifier un pronostic.
+   - Téléphone B : recharger la page.
+   - Le changement doit apparaître.
+
 ## Si les utilisateurs restent "isolés" (cas fréquent)
 
 Le cas le plus courant est un **cache PWA ancien** sur les téléphones (ancien `runtime-config.js`), ce qui fait que l'app continue à utiliser le mode local même si la config a été changée.
