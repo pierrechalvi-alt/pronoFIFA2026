@@ -42,7 +42,10 @@ function registerServiceWorker(){
 }
 
 async function init(){
-  if (enforceCanonicalAppOrigin()) return;
+  if (enforceCanonicalAppOrigin()) {
+    markBootReady();
+    return;
+  }
   if (!APP || !USERBOX) {
     console.error("Impossible d'initialiser l'application : éléments racine introuvables.");
     return;
@@ -110,6 +113,7 @@ function enforceCanonicalAppOrigin(){
 }
 
 function isCanonicalRedirectDisabled(){
+  if (window?.location?.hostname?.endsWith(".trycloudflare.com")) return true;
   const explicitMeta = document.querySelector('meta[name="fwc26-disable-canonical-redirect"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_DISABLE_CANONICAL_REDIRECT__ : null;
   const raw = String(explicitMeta || explicitGlobal || "").trim().toLowerCase();
