@@ -87,8 +87,7 @@ async function init(){
 function resolveCanonicalAppOrigin(){
   const explicitMeta = document.querySelector('meta[name="fwc26-canonical-origin"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_CANONICAL_ORIGIN__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_canonical_origin");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  const raw = String(explicitMeta || explicitGlobal || "").trim();
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
@@ -105,8 +104,7 @@ function enforceCanonicalAppOrigin(){
 function isCanonicalRedirectDisabled(){
   const explicitMeta = document.querySelector('meta[name="fwc26-disable-canonical-redirect"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_DISABLE_CANONICAL_REDIRECT__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_disable_canonical_redirect");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim().toLowerCase();
+  const raw = String(explicitMeta || explicitGlobal || "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
@@ -320,6 +318,7 @@ function resolveCommunityApiBase(){
   const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Api");
   const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || CANONICAL_APP_ORIGIN || "").trim();
   const explicitLocalStorage = readStorageItem("fwc26_community_api");
   const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || CANONICAL_APP_ORIGIN || "").trim();
   if (!raw) {
