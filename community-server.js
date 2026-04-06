@@ -68,14 +68,6 @@ function boot(){
       return;
     }
 
-    if (isPath(pathname, ["/"]) && req.method === "GET") {
-      return sendJson(res, 200, {
-        ok: true,
-        service: "pronoFIFA2026-community",
-        endpoints: ["/api/health", "/api/snapshot", "/api/stream"]
-      });
-    }
-
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(req, res);
     }
