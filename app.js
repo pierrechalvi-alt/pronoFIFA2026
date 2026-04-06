@@ -12,6 +12,7 @@ const SYNC_CHANNEL_NAME = "fwc26_sync";
 let syncChannel = null;
 let communityStream = null;
 let communitySyncTimer = null;
+let communityPullInterval = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
@@ -61,6 +62,7 @@ async function init(){
         <small>Détail technique : ${escapeHtml(err?.message || "erreur inconnue")}</small>
       </section>
     `;
+    markBootReady();
     return;
   }
 
@@ -69,6 +71,7 @@ async function init(){
   requestPersistentStorage();
   setupRealtimeSync();
   setupCommunityRealtimeSync();
+  setupCommunityPolling();
   startMatchLifecycleMonitor();
 
   if (state.data?.lastUserKey) {
@@ -80,13 +83,19 @@ async function init(){
   }
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
+  markBootReady();
+}
+
+function markBootReady(){
+  if (typeof window !== "undefined" && window.__FWC26_BOOT_STATUS__) {
+    window.__FWC26_BOOT_STATUS__.ready = true;
+  }
 }
 
 function resolveCanonicalAppOrigin(){
   const explicitMeta = document.querySelector('meta[name="fwc26-canonical-origin"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_CANONICAL_ORIGIN__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_canonical_origin");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim();
+  const raw = String(explicitMeta || explicitGlobal || "").trim();
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
@@ -103,8 +112,7 @@ function enforceCanonicalAppOrigin(){
 function isCanonicalRedirectDisabled(){
   const explicitMeta = document.querySelector('meta[name="fwc26-disable-canonical-redirect"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_DISABLE_CANONICAL_REDIRECT__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_disable_canonical_redirect");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || "").trim().toLowerCase();
+  const raw = String(explicitMeta || explicitGlobal || "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
@@ -315,8 +323,10 @@ function setupRealtimeSync(){
 }
 
 function resolveCommunityApiBase(){
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Api");
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
-  const raw = String(explicitGlobal || CANONICAL_APP_ORIGIN || "").trim();
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || CANONICAL_APP_ORIGIN || "").trim();
   if (!raw) {
     if (window?.location?.protocol === "http:" || window?.location?.protocol === "https:") {
       return window.location.origin;
@@ -330,11 +340,7 @@ function resolveCommunityApiBase(){
 async function hydrateCommunitySnapshot(){
   if (!COMMUNITY_API_BASE) return;
   try {
-    const response = await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, { cache: "no-store" });
-    if (!response.ok) return;
-    const payload = await response.json();
-    if (!payload?.snapshot) return;
-    integrateIncomingData(payload.snapshot, "community-hydrate");
+    await pullCommunitySnapshot("community-hydrate");
   } catch (err) {
     console.warn("Synchronisation communauté indisponible :", err?.message || err);
   }
@@ -359,6 +365,22 @@ function setupCommunityRealtimeSync(){
   } catch (err) {
     console.warn("Impossible d'ouvrir le flux communauté :", err?.message || err);
   }
+}
+
+function setupCommunityPolling(){
+  if (!COMMUNITY_API_BASE) return;
+  if (communityPullInterval) clearInterval(communityPullInterval);
+  communityPullInterval = setInterval(() => {
+    pullCommunitySnapshot("community-poll").catch(() => {});
+  }, 12000);
+}
+
+async function pullCommunitySnapshot(source){
+  const response = await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, { cache: "no-store" });
+  if (!response.ok) return;
+  const payload = await response.json();
+  if (!payload?.snapshot) return;
+  integrateIncomingData(payload.snapshot, source);
 }
 
 function queueCommunitySnapshotPush(){
