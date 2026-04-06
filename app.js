@@ -749,28 +749,9 @@ function renderWelcome(){
 function renderApp(){
   const u = currentUser();
   const isContestMode = Boolean(u.tieBreakerSubmittedAt);
-  APP.innerHTML = `${renderCommunitySyncBanner()}${isContestMode ? renderTournamentHub() : renderPredictionJourney()}`;
+  APP.innerHTML = isContestMode ? renderTournamentHub() : renderPredictionJourney();
   wireMatchButtons();
   wireHubControls();
-}
-
-function renderCommunitySyncBanner(){
-  const isCommunityEnabled = Boolean(COMMUNITY_API_BASE);
-  const endpointLabel = isCommunityEnabled ? COMMUNITY_API_BASE : "Aucun endpoint";
-  return `
-    <section class="card sync-status-card">
-      <div class="row" style="justify-content:space-between; gap:12px">
-        <div>
-          <strong>Synchronisation communauté :</strong>
-          <span class="badge ${isCommunityEnabled ? "a1" : "a2"}" style="margin-left:8px">
-            ${isCommunityEnabled ? "Active" : "Locale uniquement"}
-          </span>
-          <p style="margin:8px 0 0 0">Endpoint API : <code>${escapeHtml(endpointLabel)}</code></p>
-        </div>
-      </div>
-      <small>Pour partager les mêmes comptes/pronostics sur plusieurs téléphones, tous les appareils doivent utiliser exactement la même URL d'application et le même endpoint API.</small>
-    </section>
-  `;
 }
 
 function renderPredictionJourney(){
