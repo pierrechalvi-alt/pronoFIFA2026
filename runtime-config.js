@@ -1,13 +1,13 @@
-// Configuration de production actuelle.
-// URL publique de l'application (GitHub Pages) :
-// https://pierrechalvi-alt.github.io/pronoFIFA2026/
+// Configuration runtime (Cloudflare Tunnel + Node).
 //
-// IMPORTANT :
-// L'infra communautaire est maintenant pilotée côté Cloudflare + Node.
-// Le front lit uniquement `__FWC26_COMMUNITY_API__` pour cibler le backend /api/*.
-// Cette URL doit donc être maintenue ici (source de vérité unique côté client).
+// Mode recommandé pour ton usage actuel :
+// - lancer `node community-server.js` en local/VPS
+// - exposer ce serveur via une URL HTTPS Cloudflare Tunnel
+// - ouvrir l'app via CETTE MÊME URL sur tous les téléphones
+//
+// Laisse vide pour utiliser automatiquement l'origin courante.
+window.__FWC26_CANONICAL_ORIGIN__ = "";
+window.__FWC26_COMMUNITY_API__ = "";
 
-window.__FWC26_CANONICAL_ORIGIN__ = "https://pierrechalvi-alt.github.io";
-window.__FWC26_COMMUNITY_API__ = "https://pronofifa2026-community.onrender.com";
-// Optionnel (tests locaux / tunnel) : "true" pour désactiver la redirection canonique.
-// window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
+// En tunnel Cloudflare l'URL peut changer : on évite les redirections forcées.
+window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
