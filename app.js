@@ -315,10 +315,8 @@ function setupRealtimeSync(){
 }
 
 function resolveCommunityApiBase(){
-  const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_community_api");
-  const raw = String(explicitMeta || explicitGlobal || explicitLocalStorage || CANONICAL_APP_ORIGIN || "").trim();
+  const raw = String(explicitGlobal || CANONICAL_APP_ORIGIN || "").trim();
   if (!raw) {
     if (window?.location?.protocol === "http:" || window?.location?.protocol === "https:") {
       return window.location.origin;
