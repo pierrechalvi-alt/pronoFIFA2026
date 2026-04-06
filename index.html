@@ -40,6 +40,15 @@
 
   <script src="./runtime-config.js"></script>
   <script>
+    window.__FWC26_BOOT_STATUS__ = { ready: false, errors: [] };
+    window.addEventListener("error", (event) => {
+      const message = event?.error?.stack || event?.message || "Erreur JavaScript inconnue";
+      window.__FWC26_BOOT_STATUS__.errors.push(`error: ${message}`);
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event?.reason?.stack || event?.reason?.message || String(event?.reason || "Promesse rejetée inconnue");
+      window.__FWC26_BOOT_STATUS__.errors.push(`unhandledrejection: ${reason}`);
+    });
     window.__FWC26_BOOT_STATUS__ = { ready: false };
     setTimeout(async () => {
       if (window.__FWC26_BOOT_STATUS__?.ready) return;
@@ -64,6 +73,9 @@
           <h1>Chargement incomplet de l'application</h1>
           <p>Le HTML est bien chargé, mais le script principal ne s'est pas initialisé correctement.</p>
           <p>Vérifie les statuts ci-dessous puis recharge la page (Ctrl/Cmd + Shift + R).</p>
+          <h3>Erreurs JavaScript détectées</h3>
+          <pre style="white-space:pre-wrap">${(window.__FWC26_BOOT_STATUS__?.errors || []).join("\n") || "Aucune erreur capturée (ouvrir la console navigateur)."}</pre>
+          <h3>Statut des ressources</h3>
           <pre style="white-space:pre-wrap">${checks.join("\n")}</pre>
         </section>
       `;
