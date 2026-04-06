@@ -62,6 +62,7 @@ async function init(){
         <small>Détail technique : ${escapeHtml(err?.message || "erreur inconnue")}</small>
       </section>
     `;
+    markBootReady();
     return;
   }
 
@@ -82,6 +83,13 @@ async function init(){
   }
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
+  markBootReady();
+}
+
+function markBootReady(){
+  if (typeof window !== "undefined" && window.__FWC26_BOOT_STATUS__) {
+    window.__FWC26_BOOT_STATUS__.ready = true;
+  }
 }
 
 function resolveCanonicalAppOrigin(){

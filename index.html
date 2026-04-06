@@ -39,6 +39,36 @@
   </footer>
 
   <script src="./runtime-config.js"></script>
+  <script>
+    window.__FWC26_BOOT_STATUS__ = { ready: false };
+    setTimeout(async () => {
+      if (window.__FWC26_BOOT_STATUS__?.ready) return;
+      const appRoot = document.getElementById("app");
+      if (!appRoot) return;
+      const targets = [
+        "./app.js",
+        "./styles.css",
+        "./data/teams.json",
+        "./data/matches.json"
+      ];
+      const checks = await Promise.all(targets.map(async (url) => {
+        try {
+          const response = await fetch(url, { method: "GET", cache: "no-store" });
+          return `${url} → HTTP ${response.status}`;
+        } catch (err) {
+          return `${url} → erreur réseau (${err?.message || "inconnue"})`;
+        }
+      }));
+      appRoot.innerHTML = `
+        <section class="card">
+          <h1>Chargement incomplet de l'application</h1>
+          <p>Le HTML est bien chargé, mais le script principal ne s'est pas initialisé correctement.</p>
+          <p>Vérifie les statuts ci-dessous puis recharge la page (Ctrl/Cmd + Shift + R).</p>
+          <pre style="white-space:pre-wrap">${checks.join("\n")}</pre>
+        </section>
+      `;
+    }, 2800);
+  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
