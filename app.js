@@ -48,6 +48,16 @@ async function init(){
   }
   if (!APP || !USERBOX) {
     console.error("Impossible d'initialiser l'application : éléments racine introuvables.");
+    const host = document.getElementById("app") || document.body;
+    if (host) {
+      host.innerHTML = `
+        <section class="card">
+          <h1>Initialisation impossible</h1>
+          <p>Les éléments racine <code>#app</code> ou <code>#userBox</code> sont introuvables dans <code>index.html</code>.</p>
+        </section>
+      `;
+    }
+    markBootReady();
     return;
   }
   try {
