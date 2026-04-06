@@ -39,19 +39,17 @@ function boot(){
       if (!parsed || typeof parsed !== "object" || !parsed.snapshot) {
         return sendJson(res, 400, { ok: false, error: "invalid_payload" });
       }
-      const incomingUpdatedAt = Number(parsed.updatedAt || 0);
-      if (incomingUpdatedAt >= Number(snapshotState.updatedAt || 0)) {
-        snapshotState = {
-          updatedAt: incomingUpdatedAt || Date.now(),
-          snapshot: parsed.snapshot
-        };
-        persistSnapshot(snapshotState);
-        broadcast({
-          clientId: parsed.clientId || null,
-          updatedAt: snapshotState.updatedAt,
-          snapshot: snapshotState.snapshot
-        });
-      }
+      const mergedSnapshot = mergeSnapshots(snapshotState.snapshot || {}, parsed.snapshot || {});
+      snapshotState = {
+        updatedAt: Date.now(),
+        snapshot: mergedSnapshot
+      };
+      persistSnapshot(snapshotState);
+      broadcast({
+        clientId: parsed.clientId || null,
+        updatedAt: snapshotState.updatedAt,
+        snapshot: snapshotState.snapshot
+      });
       return sendJson(res, 200, { ok: true, updatedAt: snapshotState.updatedAt });
     }
 
@@ -149,6 +147,89 @@ function loadSnapshot(){
   } catch {
     return { updatedAt: 0, snapshot: null };
   }
+}
+
+function normalizeDataShape(raw){
+  const parsed = raw && typeof raw === "object" ? { ...raw } : {};
+  if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
+    parsed.thirdHalf = { comments: [] };
+  }
+  parsed.thirdHalf.comments = parsed.thirdHalf.comments.map((comment) => ({
+    ...comment,
+    replies: Array.isArray(comment.replies) ? comment.replies : []
+  }));
+  if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
+  if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  if (!parsed.notifications || typeof parsed.notifications !== "object") {
+    parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
+  }
+  if (!Array.isArray(parsed.notifications.feed)) parsed.notifications.feed = [];
+  if (!Number.isFinite(Number(parsed.notifications.unreadCount))) parsed.notifications.unreadCount = 0;
+  if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
+    parsed.notifications.delivered = {};
+  }
+  return parsed;
+}
+
+function mergeSnapshots(baseRaw, incomingRaw){
+  const base = normalizeDataShape(baseRaw);
+  const incoming = normalizeDataShape(incomingRaw);
+  const mergedUsers = { ...base.users };
+
+  for (const [key, incomingUser] of Object.entries(incoming.users || {})) {
+    const existingUser = mergedUsers[key];
+    if (!existingUser) {
+      mergedUsers[key] = incomingUser;
+      continue;
+    }
+    mergedUsers[key] = {
+      ...existingUser,
+      ...incomingUser,
+      profile: incomingUser.profile || existingUser.profile,
+      picks: { ...(existingUser.picks || {}), ...(incomingUser.picks || {}) },
+      qualifiers: { ...(existingUser.qualifiers || {}), ...(incomingUser.qualifiers || {}) }
+    };
+  }
+
+  const commentMap = new Map();
+  for (const comment of [...(base.thirdHalf?.comments || []), ...(incoming.thirdHalf?.comments || [])]) {
+    const existing = commentMap.get(comment.id);
+    if (!existing) {
+      commentMap.set(comment.id, { ...comment, replies: Array.isArray(comment.replies) ? comment.replies : [] });
+      continue;
+    }
+    const repliesMap = new Map();
+    for (const reply of [...(existing.replies || []), ...((comment.replies || []))]) {
+      repliesMap.set(reply.id, reply);
+    }
+    commentMap.set(comment.id, {
+      ...existing,
+      ...comment,
+      likes: { ...(existing.likes || {}), ...(comment.likes || {}) },
+      replies: [...repliesMap.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    });
+  }
+
+  const notifMap = new Map();
+  for (const notification of [...(base.notifications?.feed || []), ...(incoming.notifications?.feed || [])]) {
+    notifMap.set(notification.id, notification);
+  }
+
+  return normalizeDataShape({
+    ...base,
+    ...incoming,
+    users: mergedUsers,
+    thirdHalf: {
+      comments: [...commentMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    },
+    notifications: {
+      feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
+      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
+    },
+    lastUserKey: incoming.lastUserKey || base.lastUserKey,
+    updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+  });
 }
 
 function persistSnapshot(payload){
