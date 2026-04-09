@@ -7,6 +7,8 @@ const HOST = process.env.HOST || "0.0.0.0";
 const DB_FILE = process.env.COMMUNITY_DB_FILE || path.join(__dirname, "data", "community-sync.json");
 const WEB_ROOT = process.env.COMMUNITY_WEB_ROOT || __dirname;
 
+let roomsState = { global: { updatedAt: 0, snapshot: null } };
+const streamClients = new Map();
 let snapshotState = {
   updatedAt: 0,
   snapshot: null
@@ -17,21 +19,24 @@ let heartbeatInterval = null;
 boot();
 
 function boot(){
-  snapshotState = loadSnapshot();
+  roomsState = loadSnapshotStore();
   const server = http.createServer(async (req, res) => {
     setCors(res);
-    const pathname = getPathname(req.url);
+    const requestUrl = parseRequestUrl(req.url);
+    const pathname = requestUrl.pathname;
+    const room = resolveRoom(requestUrl.searchParams.get("room"));
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       return res.end();
     }
 
     if (isPath(pathname, ["/api/health", "/health"]) && req.method === "GET") {
-      return sendJson(res, 200, { ok: true, updatedAt: snapshotState.updatedAt });
+      const state = getRoomState(room);
+      return sendJson(res, 200, { ok: true, room, updatedAt: state.updatedAt, rooms: Object.keys(roomsState).length });
     }
 
     if (isPath(pathname, ["/api/snapshot", "/snapshot"]) && req.method === "GET") {
-      return sendJson(res, 200, snapshotState);
+      return sendJson(res, 200, getRoomState(room));
     }
 
     if (isPath(pathname, ["/api/snapshot", "/snapshot"]) && req.method === "POST") {
@@ -40,18 +45,22 @@ function boot(){
       if (!parsed || typeof parsed !== "object" || !parsed.snapshot) {
         return sendJson(res, 400, { ok: false, error: "invalid_payload" });
       }
-      const mergedSnapshot = mergeSnapshots(snapshotState.snapshot || {}, parsed.snapshot || {});
-      snapshotState = {
+      const currentState = getRoomState(resolveRoom(parsed.room || room));
+      const mergedSnapshot = mergeSnapshots(currentState.snapshot || {}, parsed.snapshot || {});
+      const nextState = {
         updatedAt: Date.now(),
         snapshot: mergedSnapshot
       };
-      persistSnapshot(snapshotState);
-      broadcast({
+      const targetRoom = resolveRoom(parsed.room || room);
+      roomsState[targetRoom] = nextState;
+      persistSnapshotStore(roomsState);
+      broadcastToRoom(targetRoom, {
         clientId: parsed.clientId || null,
-        updatedAt: snapshotState.updatedAt,
-        snapshot: snapshotState.snapshot
+        room: targetRoom,
+        updatedAt: nextState.updatedAt,
+        snapshot: nextState.snapshot
       });
-      return sendJson(res, 200, { ok: true, updatedAt: snapshotState.updatedAt });
+      return sendJson(res, 200, { ok: true, room: targetRoom, updatedAt: nextState.updatedAt });
     }
 
     if (isPath(pathname, ["/api/stream", "/stream"]) && req.method === "GET") {
@@ -62,6 +71,17 @@ function boot(){
         "X-Accel-Buffering": "no"
       });
       res.write("retry: 4000\n\n");
+      const roomClients = streamClients.get(room) || new Set();
+      roomClients.add(res);
+      streamClients.set(room, roomClients);
+      ensureHeartbeat();
+      const state = getRoomState(room);
+      if (state.snapshot) {
+        res.write(`data: ${JSON.stringify({ ...state, room })}\n\n`);
+      }
+      req.on("close", () => {
+        roomClients.delete(res);
+        if (roomClients.size === 0) streamClients.delete(room);
       clients.add(res);
       ensureHeartbeat();
       if (snapshotState.snapshot) {
@@ -89,11 +109,27 @@ function boot(){
 }
 
 function getPathname(urlValue){
+  return parseRequestUrl(urlValue).pathname;
+}
+
+function parseRequestUrl(urlValue){
   try {
-    return new URL(urlValue || "/", "http://localhost").pathname;
+    return new URL(urlValue || "/", "http://localhost");
   } catch {
-    return "/";
+    return new URL("/", "http://localhost");
   }
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
 }
 
 function isPath(pathname, candidates){
@@ -132,18 +168,29 @@ function safeJsonParse(raw){
   }
 }
 
-function loadSnapshot(){
+function loadSnapshotStore(){
   try {
-    if (!fs.existsSync(DB_FILE)) return { updatedAt: 0, snapshot: null };
+    if (!fs.existsSync(DB_FILE)) return { global: { updatedAt: 0, snapshot: null } };
     const raw = fs.readFileSync(DB_FILE, "utf8");
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return { updatedAt: 0, snapshot: null };
+    if (!parsed || typeof parsed !== "object") return { global: { updatedAt: 0, snapshot: null } };
+    if (parsed.rooms && typeof parsed.rooms === "object") {
+      return Object.entries(parsed.rooms).reduce((acc, [room, value]) => {
+        acc[resolveRoom(room)] = {
+          updatedAt: Number(value?.updatedAt || 0),
+          snapshot: value?.snapshot || null
+        };
+        return acc;
+      }, { global: { updatedAt: 0, snapshot: null } });
+    }
     return {
-      updatedAt: Number(parsed.updatedAt || 0),
-      snapshot: parsed.snapshot || null
+      global: {
+        updatedAt: Number(parsed.updatedAt || 0),
+        snapshot: parsed.snapshot || null
+      }
     };
   } catch {
-    return { updatedAt: 0, snapshot: null };
+    return { global: { updatedAt: 0, snapshot: null } };
   }
 }
 
@@ -244,18 +291,19 @@ function mergeSnapshots(baseRaw, incomingRaw){
   });
 }
 
-function persistSnapshot(payload){
+function persistSnapshotStore(payload){
   try {
     const dir = path.dirname(DB_FILE);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DB_FILE, JSON.stringify(payload), "utf8");
+    fs.writeFileSync(DB_FILE, JSON.stringify({ rooms: payload }), "utf8");
   } catch (err) {
     console.error("Failed to persist community snapshot:", err?.message || err);
   }
 }
 
-function broadcast(payload){
+function broadcastToRoom(room, payload){
   const line = `data: ${JSON.stringify(payload)}\n\n`;
+  const clients = streamClients.get(room) || new Set();
   for (const client of clients) {
     try {
       client.write(line);
@@ -263,6 +311,32 @@ function broadcast(payload){
       clients.delete(client);
     }
   }
+  if (clients.size === 0) streamClients.delete(room);
+}
+
+function ensureHeartbeat(){
+  if (heartbeatInterval) return;
+  heartbeatInterval = setInterval(() => {
+    const beat = `event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`;
+    for (const [room, clients] of streamClients.entries()) {
+      for (const client of clients) {
+        try {
+          client.write(beat);
+        } catch {
+          clients.delete(client);
+        }
+      }
+      if (clients.size === 0) streamClients.delete(room);
+    }
+    stopHeartbeatIfIdle();
+  }, 15000);
+}
+
+function stopHeartbeatIfIdle(){
+  if (streamClients.size > 0) return;
+  if (!heartbeatInterval) return;
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
 }
 
 function ensureHeartbeat(){

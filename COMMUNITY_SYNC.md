@@ -28,6 +28,13 @@ https://abcde.trycloudflare.com/
 ```
 
 > Important : tous les appareils doivent utiliser exactement la même URL front.
+> Et le même **room** de synchro (par défaut `global`).
+
+Exemple avec room explicite :
+
+```text
+https://abcde.trycloudflare.com/?fwc26Room=bureau
+```
 
 ## runtime-config.js
 
@@ -36,11 +43,13 @@ Le fichier est maintenant neutre pour le mode tunnel :
 ```js
 window.__FWC26_CANONICAL_ORIGIN__ = "";
 window.__FWC26_COMMUNITY_API__ = "";
+window.__FWC26_COMMUNITY_ROOM__ = "global";
 window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
 ```
 
 - `CANONICAL_ORIGIN` vide => pas de redirection forcée.
 - `COMMUNITY_API` vide => l'app utilise automatiquement l'origin courante.
+- `COMMUNITY_ROOM` => espace de synchro partagé entre les utilisateurs.
 - Redirection canonique désactivée => évite les boucles quand l'URL tunnel change.
 
 ## Vérification rapide
@@ -48,7 +57,7 @@ window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
 Depuis un navigateur mobile :
 
 - `https://abcde.trycloudflare.com/api/health` → doit renvoyer `{"ok":true,...}`
-- `https://abcde.trycloudflare.com/api/snapshot` → doit renvoyer un snapshot JSON
+- `https://abcde.trycloudflare.com/api/snapshot?room=bureau` → doit renvoyer un snapshot JSON
 
 Test fonctionnel :
 1. Mobile A modifie un pronostic.
