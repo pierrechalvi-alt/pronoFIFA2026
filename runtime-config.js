@@ -8,6 +8,7 @@
 // Laisse vide pour utiliser automatiquement l'origin courante.
 window.__FWC26_CANONICAL_ORIGIN__ = "";
 window.__FWC26_COMMUNITY_API__ = "";
+window.__FWC26_COMMUNITY_ROOM__ = "bureau";
 
 // En tunnel Cloudflare l'URL peut changer : on évite les redirections forcées.
 window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
