@@ -2,6 +2,7 @@ const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
 const LS_KEY = "fwc26_pronos_v1";
+const SESSION_USER_KEY = "fwc26_last_user_key_v2";
 const DB_NAME = "fwc26_pronos_db";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
@@ -16,6 +17,7 @@ let communityPullInterval = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
+const COMMUNITY_ROOM = resolveCommunityRoom();
 
 const state = {
   me: null,
@@ -87,8 +89,9 @@ async function init(){
   setupCommunityPolling();
   startMatchLifecycleMonitor();
 
-  if (state.data?.lastUserKey) {
-    const u = state.data.users?.[state.data.lastUserKey];
+  const localUserKey = readStorageItem(SESSION_USER_KEY);
+  if (localUserKey) {
+    const u = state.data.users?.[localUserKey];
     if (u?.profile) {
       state.me = u.profile;
       state.onboardingStep = "app";
@@ -249,7 +252,7 @@ function userKey(profile){
 }
 
 function loadAll(){
-  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
+  const fallback = { users:{}, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
     const raw = readStorageItem(LS_KEY);
     const parsed = raw ? JSON.parse(raw) : fallback;
@@ -276,7 +279,21 @@ function normalizeDataShape(raw){
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
+  const lastReadAt = Number(parsed.notifications.lastReadAt || 0);
+  parsed.notifications.lastReadAt = Number.isFinite(lastReadAt) ? lastReadAt : 0;
+  parsed.notifications.unreadCount = computeUnreadCount(parsed.notifications);
   return parsed;
+}
+
+function computeUnreadCount(notifications){
+  const feed = Array.isArray(notifications?.feed) ? notifications.feed : [];
+  const lastReadAt = Number(notifications?.lastReadAt || 0);
+  let unread = 0;
+  for (const item of feed){
+    const createdAt = new Date(item?.createdAt || 0).getTime();
+    if (Number.isFinite(createdAt) && createdAt > lastReadAt) unread += 1;
+  }
+  return Math.min(99, unread);
 }
 
 async function hydrateDataStore(){
@@ -351,6 +368,20 @@ function resolveCommunityApiBase(){
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
+function resolveCommunityRoom(){
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Room");
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-room"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_ROOM__ : null;
+  const explicitLocalStorage = readStorageItem("fwc26_community_room");
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || "global").trim().toLowerCase();
+  return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function withCommunityRoom(url){
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}room=${encodeURIComponent(COMMUNITY_ROOM)}`;
+}
+
 async function hydrateCommunitySnapshot(){
   if (!COMMUNITY_API_BASE) return;
   try {
@@ -363,7 +394,7 @@ async function hydrateCommunitySnapshot(){
 function setupCommunityRealtimeSync(){
   if (!COMMUNITY_API_BASE || typeof EventSource === "undefined") return;
   try {
-    communityStream = new EventSource(`${COMMUNITY_API_BASE}/api/stream`);
+    communityStream = new EventSource(withCommunityRoom(`${COMMUNITY_API_BASE}/api/stream`));
     communityStream.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
@@ -390,7 +421,7 @@ function setupCommunityPolling(){
 }
 
 async function pullCommunitySnapshot(source){
-  const response = await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, { cache: "no-store" });
+  const response = await fetch(withCommunityRoom(`${COMMUNITY_API_BASE}/api/snapshot`), { cache: "no-store" });
   if (!response.ok) return;
   const payload = await response.json();
   if (!payload?.snapshot) return;
@@ -410,11 +441,12 @@ function queueCommunitySnapshotPush(){
 async function pushCommunitySnapshot(){
   if (!COMMUNITY_API_BASE) return;
   try {
-    await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, {
+    await fetch(withCommunityRoom(`${COMMUNITY_API_BASE}/api/snapshot`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clientId: CLIENT_ID,
+        room: COMMUNITY_ROOM,
         updatedAt: Number(state.data?.updatedAt || Date.now()),
         snapshot: state.data
       })
@@ -435,10 +467,24 @@ function broadcastSnapshot(){
 
 function integrateIncomingData(incomingRaw, source){
   const incoming = normalizeDataShape(incomingRaw);
+  const previousFeed = Array.isArray(state.data?.notifications?.feed) ? state.data.notifications.feed : [];
+  const previousCommentIds = new Set((state.data?.thirdHalf?.comments || []).map((item) => item.id));
   const merged = mergeSnapshots(state.data, incoming);
   if (JSON.stringify(merged) === JSON.stringify(state.data)) return;
+  const incomingNotifications = (merged.notifications?.feed || []).filter((item) => !previousFeed.some((existing) => existing.id === item.id));
+  const incomingComments = (merged.thirdHalf?.comments || []).filter((item) => !previousCommentIds.has(item.id));
   state.data = merged;
   persistSnapshot(false);
+  if (source !== "storage" && source !== "indexeddb") {
+    for (const item of incomingNotifications.slice(0, 2)) {
+      if (item?.title || item?.body) showToast(`${item.title || "Notification"} — ${item.body || ""}`.trim());
+    }
+    for (const comment of incomingComments.slice(0, 2)) {
+      if (comment?.authorLabel && comment?.text) {
+        showToast(`💬 ${comment.authorLabel} : ${comment.text.slice(0, 60)}${comment.text.length > 60 ? "…" : ""}`);
+      }
+    }
+  }
   if (state.me) render();
 }
 
@@ -495,10 +541,9 @@ function mergeSnapshots(baseRaw, incomingRaw){
     },
     notifications: {
       feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
-      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
-    lastUserKey: incoming.lastUserKey || base.lastUserKey,
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
 }
@@ -552,6 +597,7 @@ function requestPersistentStorage(){
 
 function ensureUser(){
   const key = userKey(state.me);
+  let shouldPersist = false;
   if (!state.data.users[key]) {
     state.data.users[key] = {
       profile: state.me,
@@ -565,10 +611,13 @@ function ensureUser(){
       tieBreakerSubmittedAt: null,
       flashLockedAt: null
     };
+    shouldPersist = true;
   }
+  const picksBeforeSanitize = JSON.stringify(state.data.users[key].picks || {});
   sanitizeUserPicks(state.data.users[key]);
-  state.data.lastUserKey = key;
-  saveAll();
+  if (picksBeforeSanitize !== JSON.stringify(state.data.users[key].picks || {})) shouldPersist = true;
+  if (readStorageItem(SESSION_USER_KEY) !== key) writeStorageItem(SESSION_USER_KEY, key);
+  if (shouldPersist) saveAll();
   return state.data.users[key];
 }
 function currentUser(){
@@ -585,7 +634,7 @@ function setUser(profile){
 function logout(){
   state.me = null;
   state.onboardingStep = "welcome";
-  state.data.lastUserKey = null;
+  writeStorageItem(SESSION_USER_KEY, "");
   saveAll();
   render();
 }
@@ -764,7 +813,7 @@ function renderWelcome(){
     if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
     state.me = existing.profile;
     state.onboardingStep = "app";
-    state.data.lastUserKey = key;
+    writeStorageItem(SESSION_USER_KEY, key);
     saveAll();
     render();
   };
@@ -1460,6 +1509,11 @@ function submitThirdHalfReply(commentId){
     authorLabel: `${me.profile.firstName} ${me.profile.lastName}`,
     text,
     createdAt: new Date().toISOString()
+  });
+  pushAppNotification({
+    type: "bistro_reply",
+    title: "Nouvelle réponse au Bistro",
+    body: `${me.profile.firstName} a répondu : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
   });
   saveAll();
   render();
@@ -2271,7 +2325,7 @@ function pushAppNotification({ type, title, body, uniqueKey }){
     createdAt: new Date().toISOString()
   });
   state.data.notifications.feed = state.data.notifications.feed.slice(0, 50);
-  state.data.notifications.unreadCount = Math.min(99, Number(state.data.notifications.unreadCount || 0) + 1);
+  state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   showToast(`${title || "Notification"} — ${body || ""}`.trim());
   sendBrowserNotification(title || "Notification", body || "");
   return true;
@@ -2317,7 +2371,8 @@ function openNotificationsCenter(){
       .join("\n");
     alert(`Notifications récentes:\n\n${preview}`);
   }
-  if (state.data.notifications) state.data.notifications.unreadCount = 0;
+  if (state.data.notifications) state.data.notifications.lastReadAt = Date.now();
+  if (state.data.notifications) state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   saveAll();
   render();
 }
