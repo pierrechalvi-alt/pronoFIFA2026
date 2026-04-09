@@ -276,7 +276,21 @@ function normalizeDataShape(raw){
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
+  const lastReadAt = Number(parsed.notifications.lastReadAt || 0);
+  parsed.notifications.lastReadAt = Number.isFinite(lastReadAt) ? lastReadAt : 0;
+  parsed.notifications.unreadCount = computeUnreadCount(parsed.notifications);
   return parsed;
+}
+
+function computeUnreadCount(notifications){
+  const feed = Array.isArray(notifications?.feed) ? notifications.feed : [];
+  const lastReadAt = Number(notifications?.lastReadAt || 0);
+  let unread = 0;
+  for (const item of feed){
+    const createdAt = new Date(item?.createdAt || 0).getTime();
+    if (Number.isFinite(createdAt) && createdAt > lastReadAt) unread += 1;
+  }
+  return Math.min(99, unread);
 }
 
 async function hydrateDataStore(){
@@ -495,7 +509,7 @@ function mergeSnapshots(baseRaw, incomingRaw){
     },
     notifications: {
       feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
-      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
     lastUserKey: incoming.lastUserKey || base.lastUserKey,
@@ -2271,7 +2285,7 @@ function pushAppNotification({ type, title, body, uniqueKey }){
     createdAt: new Date().toISOString()
   });
   state.data.notifications.feed = state.data.notifications.feed.slice(0, 50);
-  state.data.notifications.unreadCount = Math.min(99, Number(state.data.notifications.unreadCount || 0) + 1);
+  state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   showToast(`${title || "Notification"} — ${body || ""}`.trim());
   sendBrowserNotification(title || "Notification", body || "");
   return true;
@@ -2317,7 +2331,8 @@ function openNotificationsCenter(){
       .join("\n");
     alert(`Notifications récentes:\n\n${preview}`);
   }
-  if (state.data.notifications) state.data.notifications.unreadCount = 0;
+  if (state.data.notifications) state.data.notifications.lastReadAt = Date.now();
+  if (state.data.notifications) state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   saveAll();
   render();
 }

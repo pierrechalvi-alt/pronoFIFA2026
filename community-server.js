@@ -12,6 +12,7 @@ let snapshotState = {
   snapshot: null
 };
 const clients = new Set();
+let heartbeatInterval = null;
 
 boot();
 
@@ -57,14 +58,19 @@ function boot(){
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        Connection: "keep-alive"
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
       });
-      res.write("\n");
+      res.write("retry: 4000\n\n");
       clients.add(res);
+      ensureHeartbeat();
       if (snapshotState.snapshot) {
         res.write(`data: ${JSON.stringify(snapshotState)}\n\n`);
       }
-      req.on("close", () => clients.delete(res));
+      req.on("close", () => {
+        clients.delete(res);
+        stopHeartbeatIfIdle();
+      });
       return;
     }
 
@@ -160,7 +166,21 @@ function normalizeDataShape(raw){
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
+  const lastReadAt = Number(parsed.notifications.lastReadAt || 0);
+  parsed.notifications.lastReadAt = Number.isFinite(lastReadAt) ? lastReadAt : 0;
+  parsed.notifications.unreadCount = computeUnreadCount(parsed.notifications);
   return parsed;
+}
+
+function computeUnreadCount(notifications){
+  const feed = Array.isArray(notifications?.feed) ? notifications.feed : [];
+  const lastReadAt = Number(notifications?.lastReadAt || 0);
+  let unread = 0;
+  for (const item of feed) {
+    const createdAt = new Date(item?.createdAt || 0).getTime();
+    if (Number.isFinite(createdAt) && createdAt > lastReadAt) unread += 1;
+  }
+  return Math.min(99, unread);
 }
 
 function mergeSnapshots(baseRaw, incomingRaw){
@@ -216,7 +236,7 @@ function mergeSnapshots(baseRaw, incomingRaw){
     },
     notifications: {
       feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
-      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
     lastUserKey: incoming.lastUserKey || base.lastUserKey,
@@ -243,6 +263,28 @@ function broadcast(payload){
       clients.delete(client);
     }
   }
+}
+
+function ensureHeartbeat(){
+  if (heartbeatInterval) return;
+  heartbeatInterval = setInterval(() => {
+    const beat = `event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`;
+    for (const client of clients) {
+      try {
+        client.write(beat);
+      } catch {
+        clients.delete(client);
+      }
+    }
+    stopHeartbeatIfIdle();
+  }, 15000);
+}
+
+function stopHeartbeatIfIdle(){
+  if (clients.size > 0) return;
+  if (!heartbeatInterval) return;
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
 }
 
 function serveStatic(req, res){
