@@ -118,6 +118,7 @@ function parseRequestUrl(urlValue){
   } catch {
     return new URL("/", "http://localhost");
   }
+  return roomsState[room];
 }
 
 function resolveRoom(rawRoom){
@@ -362,9 +363,11 @@ function stopHeartbeatIfIdle(){
 }
 
 function serveStatic(req, res){
-  const rawUrl = req.url === "/" ? "/index.html" : req.url;
-  const pathname = decodeURIComponent(rawUrl.split("?")[0]);
-  const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, "");
+  const pathname = decodeURIComponent((req.url || "/").split("?")[0]);
+  const normalizedPath = pathname === "/" ? "/index.html" : pathname;
+  const safePath = path.normalize(normalizedPath)
+    .replace(/^(\.\.[/\\])+/, "")
+    .replace(/^[/\\]+/, "");
   const absolutePath = path.join(WEB_ROOT, safePath);
 
   if (!absolutePath.startsWith(path.normalize(WEB_ROOT + path.sep))) {
