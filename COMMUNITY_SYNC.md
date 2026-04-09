@@ -55,6 +55,12 @@ Test fonctionnel :
 2. Mobile B recharge.
 3. La même donnée doit apparaître.
 
+## Stabilité inter-navigateurs (mise à jour)
+
+- Le flux temps réel (`/api/stream`) envoie maintenant des **heartbeats SSE** réguliers pour éviter les coupures silencieuses sur certains proxys/réseaux mobiles.
+- Le service worker privilégie désormais le **network-first** pour le shell applicatif (`index.html`, `app.js`, `data/*`) afin d'éviter qu'un navigateur reste bloqué sur une ancienne version.
+- Les notifications sont marquées comme lues via un horodatage partagé (`lastReadAt`), ce qui évite que le compteur revienne après synchronisation sur un autre appareil.
+
 ## Si ça ne synchronise toujours pas
 
 1. Vérifier que le tunnel Cloudflare est actif (pas fermé).
