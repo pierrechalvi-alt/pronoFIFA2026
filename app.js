@@ -2,6 +2,7 @@ const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
 const LS_KEY = "fwc26_pronos_v1";
+const SESSION_USER_KEY = "fwc26_last_user_key_v2";
 const DB_NAME = "fwc26_pronos_db";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
@@ -88,8 +89,9 @@ async function init(){
   setupCommunityPolling();
   startMatchLifecycleMonitor();
 
-  if (state.data?.lastUserKey) {
-    const u = state.data.users?.[state.data.lastUserKey];
+  const localUserKey = readStorageItem(SESSION_USER_KEY);
+  if (localUserKey) {
+    const u = state.data.users?.[localUserKey];
     if (u?.profile) {
       state.me = u.profile;
       state.onboardingStep = "app";
@@ -250,7 +252,7 @@ function userKey(profile){
 }
 
 function loadAll(){
-  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
+  const fallback = { users:{}, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
     const raw = readStorageItem(LS_KEY);
     const parsed = raw ? JSON.parse(raw) : fallback;
@@ -465,10 +467,24 @@ function broadcastSnapshot(){
 
 function integrateIncomingData(incomingRaw, source){
   const incoming = normalizeDataShape(incomingRaw);
+  const previousFeed = Array.isArray(state.data?.notifications?.feed) ? state.data.notifications.feed : [];
+  const previousCommentIds = new Set((state.data?.thirdHalf?.comments || []).map((item) => item.id));
   const merged = mergeSnapshots(state.data, incoming);
   if (JSON.stringify(merged) === JSON.stringify(state.data)) return;
+  const incomingNotifications = (merged.notifications?.feed || []).filter((item) => !previousFeed.some((existing) => existing.id === item.id));
+  const incomingComments = (merged.thirdHalf?.comments || []).filter((item) => !previousCommentIds.has(item.id));
   state.data = merged;
   persistSnapshot(false);
+  if (source !== "storage" && source !== "indexeddb") {
+    for (const item of incomingNotifications.slice(0, 2)) {
+      if (item?.title || item?.body) showToast(`${item.title || "Notification"} — ${item.body || ""}`.trim());
+    }
+    for (const comment of incomingComments.slice(0, 2)) {
+      if (comment?.authorLabel && comment?.text) {
+        showToast(`💬 ${comment.authorLabel} : ${comment.text.slice(0, 60)}${comment.text.length > 60 ? "…" : ""}`);
+      }
+    }
+  }
   if (state.me) render();
 }
 
@@ -528,7 +544,6 @@ function mergeSnapshots(baseRaw, incomingRaw){
       lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
-    lastUserKey: incoming.lastUserKey || base.lastUserKey,
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
 }
@@ -582,6 +597,7 @@ function requestPersistentStorage(){
 
 function ensureUser(){
   const key = userKey(state.me);
+  let shouldPersist = false;
   if (!state.data.users[key]) {
     state.data.users[key] = {
       profile: state.me,
@@ -595,10 +611,13 @@ function ensureUser(){
       tieBreakerSubmittedAt: null,
       flashLockedAt: null
     };
+    shouldPersist = true;
   }
+  const picksBeforeSanitize = JSON.stringify(state.data.users[key].picks || {});
   sanitizeUserPicks(state.data.users[key]);
-  state.data.lastUserKey = key;
-  saveAll();
+  if (picksBeforeSanitize !== JSON.stringify(state.data.users[key].picks || {})) shouldPersist = true;
+  if (readStorageItem(SESSION_USER_KEY) !== key) writeStorageItem(SESSION_USER_KEY, key);
+  if (shouldPersist) saveAll();
   return state.data.users[key];
 }
 function currentUser(){
@@ -615,7 +634,7 @@ function setUser(profile){
 function logout(){
   state.me = null;
   state.onboardingStep = "welcome";
-  state.data.lastUserKey = null;
+  writeStorageItem(SESSION_USER_KEY, "");
   saveAll();
   render();
 }
@@ -794,7 +813,7 @@ function renderWelcome(){
     if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
     state.me = existing.profile;
     state.onboardingStep = "app";
-    state.data.lastUserKey = key;
+    writeStorageItem(SESSION_USER_KEY, key);
     saveAll();
     render();
   };
@@ -1490,6 +1509,11 @@ function submitThirdHalfReply(commentId){
     authorLabel: `${me.profile.firstName} ${me.profile.lastName}`,
     text,
     createdAt: new Date().toISOString()
+  });
+  pushAppNotification({
+    type: "bistro_reply",
+    title: "Nouvelle réponse au Bistro",
+    body: `${me.profile.firstName} a répondu : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
   });
   saveAll();
   render();
