@@ -12,12 +12,8 @@ const FIFA_CACHE_TTL_MS = Number(process.env.FIFA_CACHE_TTL_MS || 60000);
 
 let roomsState = { global: { updatedAt: 0, snapshot: null } };
 const streamClients = new Map();
-let snapshotState = {
-  updatedAt: 0,
-  snapshot: null
-};
-const clients = new Set();
 let heartbeatInterval = null;
+let fifaCache = { fetchedAt: 0, payload: { source: FIFA_SOURCE_URL, fetchedAt: null, matches: [] } };
 
 boot();
 
@@ -28,6 +24,7 @@ function boot(){
     const requestUrl = parseRequestUrl(req.url);
     const pathname = requestUrl.pathname;
     const room = resolveRoom(requestUrl.searchParams.get("room"));
+
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       return res.end();
@@ -48,13 +45,12 @@ function boot(){
       if (!parsed || typeof parsed !== "object" || !parsed.snapshot) {
         return sendJson(res, 400, { ok: false, error: "invalid_payload" });
       }
-      const currentState = getRoomState(resolveRoom(parsed.room || room));
-      const mergedSnapshot = mergeSnapshots(currentState.snapshot || {}, parsed.snapshot || {});
-      const nextState = {
-        updatedAt: Date.now(),
-        snapshot: mergedSnapshot
-      };
+
       const targetRoom = resolveRoom(parsed.room || room);
+      const currentState = getRoomState(targetRoom);
+      const mergedSnapshot = mergeSnapshots(currentState.snapshot || {}, parsed.snapshot || {});
+      const nextState = { updatedAt: Date.now(), snapshot: mergedSnapshot };
+
       roomsState[targetRoom] = nextState;
       persistSnapshotStore(roomsState);
       broadcastToRoom(targetRoom, {
@@ -63,6 +59,7 @@ function boot(){
         updatedAt: nextState.updatedAt,
         snapshot: nextState.snapshot
       });
+
       return sendJson(res, 200, { ok: true, room: targetRoom, updatedAt: nextState.updatedAt });
     }
 
@@ -73,25 +70,21 @@ function boot(){
         Connection: "keep-alive",
         "X-Accel-Buffering": "no"
       });
+
       res.write("retry: 4000\n\n");
       const roomClients = streamClients.get(room) || new Set();
       roomClients.add(res);
       streamClients.set(room, roomClients);
       ensureHeartbeat();
+
       const state = getRoomState(room);
       if (state.snapshot) {
         res.write(`data: ${JSON.stringify({ ...state, room })}\n\n`);
       }
+
       req.on("close", () => {
         roomClients.delete(res);
         if (roomClients.size === 0) streamClients.delete(room);
-      clients.add(res);
-      ensureHeartbeat();
-      if (snapshotState.snapshot) {
-        res.write(`data: ${JSON.stringify(snapshotState)}\n\n`);
-      }
-      req.on("close", () => {
-        clients.delete(res);
         stopHeartbeatIfIdle();
       });
       return;
@@ -110,7 +103,7 @@ function boot(){
       return serveStatic(req, res);
     }
 
-    sendJson(res, 404, { ok: false, error: "not_found" });
+    return sendJson(res, 404, { ok: false, error: "not_found" });
   });
 
   server.listen(PORT, HOST, () => {
@@ -120,65 +113,12 @@ function boot(){
   });
 }
 
-function getPathname(urlValue){
-  return parseRequestUrl(urlValue).pathname;
-}
-
 function parseRequestUrl(urlValue){
   try {
     return new URL(urlValue || "/", "http://localhost");
   } catch {
     return new URL("/", "http://localhost");
   }
-  return roomsState[room];
-}
-
-function resolveRoom(rawRoom){
-  const candidate = String(rawRoom || "global").trim().toLowerCase();
-  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
-}
-
-function getRoomState(room){
-  if (!roomsState[room]) {
-    roomsState[room] = { updatedAt: 0, snapshot: null };
-  }
-  return roomsState[room];
-}
-
-function resolveRoom(rawRoom){
-  const candidate = String(rawRoom || "global").trim().toLowerCase();
-  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
-}
-
-function getRoomState(room){
-  if (!roomsState[room]) {
-    roomsState[room] = { updatedAt: 0, snapshot: null };
-  }
-  return roomsState[room];
-}
-
-function resolveRoom(rawRoom){
-  const candidate = String(rawRoom || "global").trim().toLowerCase();
-  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
-}
-
-function getRoomState(room){
-  if (!roomsState[room]) {
-    roomsState[room] = { updatedAt: 0, snapshot: null };
-  }
-  return roomsState[room];
-}
-
-function resolveRoom(rawRoom){
-  const candidate = String(rawRoom || "global").trim().toLowerCase();
-  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
-}
-
-function getRoomState(room){
-  if (!roomsState[room]) {
-    roomsState[room] = { updatedAt: 0, snapshot: null };
-  }
-  return roomsState[room];
 }
 
 function resolveRoom(rawRoom){
@@ -235,6 +175,7 @@ function loadSnapshotStore(){
     const raw = fs.readFileSync(DB_FILE, "utf8");
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return { global: { updatedAt: 0, snapshot: null } };
+
     if (parsed.rooms && typeof parsed.rooms === "object") {
       return Object.entries(parsed.rooms).reduce((acc, [room, value]) => {
         acc[resolveRoom(room)] = {
@@ -244,6 +185,7 @@ function loadSnapshotStore(){
         return acc;
       }, { global: { updatedAt: 0, snapshot: null } });
     }
+
     return {
       global: {
         updatedAt: Number(parsed.updatedAt || 0),
@@ -257,9 +199,7 @@ function loadSnapshotStore(){
 
 function normalizeDataShape(raw){
   const parsed = raw && typeof raw === "object" ? { ...raw } : {};
-  if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) {
-    parsed.thirdHalf = { comments: [] };
-  }
+  if (!parsed.thirdHalf || !Array.isArray(parsed.thirdHalf.comments)) parsed.thirdHalf = { comments: [] };
   parsed.thirdHalf.comments = parsed.thirdHalf.comments.map((comment) => ({
     ...comment,
     replies: Array.isArray(comment.replies) ? comment.replies : []
@@ -270,7 +210,6 @@ function normalizeDataShape(raw){
     parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
   }
   if (!Array.isArray(parsed.notifications.feed)) parsed.notifications.feed = [];
-  if (!Number.isFinite(Number(parsed.notifications.unreadCount))) parsed.notifications.unreadCount = 0;
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
@@ -319,9 +258,7 @@ function mergeSnapshots(baseRaw, incomingRaw){
       continue;
     }
     const repliesMap = new Map();
-    for (const reply of [...(existing.replies || []), ...((comment.replies || []))]) {
-      repliesMap.set(reply.id, reply);
-    }
+    for (const reply of [...(existing.replies || []), ...(comment.replies || [])]) repliesMap.set(reply.id, reply);
     commentMap.set(comment.id, {
       ...existing,
       ...comment,
@@ -364,30 +301,30 @@ function persistSnapshotStore(payload){
 
 function broadcastToRoom(room, payload){
   const line = `data: ${JSON.stringify(payload)}\n\n`;
-  const clients = streamClients.get(room) || new Set();
-  for (const client of clients) {
+  const roomClients = streamClients.get(room) || new Set();
+  for (const client of roomClients) {
     try {
       client.write(line);
     } catch {
-      clients.delete(client);
+      roomClients.delete(client);
     }
   }
-  if (clients.size === 0) streamClients.delete(room);
+  if (roomClients.size === 0) streamClients.delete(room);
 }
 
 function ensureHeartbeat(){
   if (heartbeatInterval) return;
   heartbeatInterval = setInterval(() => {
     const beat = `event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`;
-    for (const [room, clients] of streamClients.entries()) {
-      for (const client of clients) {
+    for (const [room, roomClients] of streamClients.entries()) {
+      for (const client of roomClients) {
         try {
           client.write(beat);
         } catch {
-          clients.delete(client);
+          roomClients.delete(client);
         }
       }
-      if (clients.size === 0) streamClients.delete(room);
+      if (roomClients.size === 0) streamClients.delete(room);
     }
     stopHeartbeatIfIdle();
   }, 15000);
@@ -395,28 +332,6 @@ function ensureHeartbeat(){
 
 function stopHeartbeatIfIdle(){
   if (streamClients.size > 0) return;
-  if (!heartbeatInterval) return;
-  clearInterval(heartbeatInterval);
-  heartbeatInterval = null;
-}
-
-function ensureHeartbeat(){
-  if (heartbeatInterval) return;
-  heartbeatInterval = setInterval(() => {
-    const beat = `event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`;
-    for (const client of clients) {
-      try {
-        client.write(beat);
-      } catch {
-        clients.delete(client);
-      }
-    }
-    stopHeartbeatIfIdle();
-  }, 15000);
-}
-
-function stopHeartbeatIfIdle(){
-  if (clients.size > 0) return;
   if (!heartbeatInterval) return;
   clearInterval(heartbeatInterval);
   heartbeatInterval = null;
@@ -436,6 +351,7 @@ function serveStatic(req, res){
   if (!fs.existsSync(absolutePath) || fs.statSync(absolutePath).isDirectory()) {
     return sendJson(res, 404, { ok: false, error: "not_found" });
   }
+
   const mime = getMimeType(absolutePath);
   res.writeHead(200, { "Content-Type": mime });
   if (req.method === "HEAD") return res.end();
@@ -495,9 +411,7 @@ function extractFifaMatches(html){
   for (const m of ldJsonMatches) candidates.push(safeJsonParse(m[1]));
 
   const extracted = [];
-  for (const candidate of candidates.filter(Boolean)) {
-    extracted.push(...collectMatchObjects(candidate));
-  }
+  for (const candidate of candidates.filter(Boolean)) extracted.push(...collectMatchObjects(candidate));
   return normalizeFifaMatches(extracted);
 }
 
@@ -549,7 +463,11 @@ function extractScore(item, side){
   const sideKey = side === "home" ? "home" : "away";
   const direct = Number(item?.[`${sideKey}Score`] ?? item?.score?.[sideKey] ?? item?.result?.[sideKey]);
   if (Number.isFinite(direct)) return direct;
-  const teams = Array.isArray(item?.score?.teams) ? item.score.teams : Array.isArray(item?.result?.teams) ? item.result.teams : null;
+  const teams = Array.isArray(item?.score?.teams)
+    ? item.score.teams
+    : Array.isArray(item?.result?.teams)
+      ? item.result.teams
+      : null;
   if (teams?.length >= 2) {
     const index = side === "home" ? 0 : 1;
     const value = Number(teams[index]?.score ?? teams[index]?.goals);
