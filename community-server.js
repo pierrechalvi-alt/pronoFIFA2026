@@ -157,6 +157,18 @@ function getRoomState(room){
   return roomsState[room];
 }
 
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
+}
+
 function isPath(pathname, candidates){
   return candidates.includes(pathname) || candidates.includes(pathname.endsWith("/") ? pathname.slice(0, -1) : pathname);
 }

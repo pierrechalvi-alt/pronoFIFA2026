@@ -34,7 +34,22 @@ const state = {
 };
 
 registerServiceWorker();
-init();
+init().catch((err) => {
+  console.error("Erreur d'initialisation non gérée :", err);
+  if (APP) {
+    APP.innerHTML = `
+      <section class="card">
+        <h1>Chargement interrompu</h1>
+        <p>Le script principal a rencontré une erreur inattendue.</p>
+        <small>${escapeHtml(err?.message || "erreur inconnue")}</small>
+      </section>
+    `;
+  }
+  if (typeof window !== "undefined") {
+    window.__FWC26_LAST_BOOT_ERROR__ = String(err?.stack || err?.message || err || "unknown");
+  }
+  markBootReady();
+});
 
 function registerServiceWorker(){
   if (!("serviceWorker" in navigator)) return;
