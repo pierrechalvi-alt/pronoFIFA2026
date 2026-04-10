@@ -393,15 +393,6 @@ function resolveCommunityRoom(){
   return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
 }
 
-function resolveLiveScoresApi(){
-  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26LiveApi");
-  const explicitMeta = document.querySelector('meta[name="fwc26-live-api"]')?.content;
-  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_LIVE_MATCHES_API__ : null;
-  const raw = String(explicitQuery || explicitMeta || explicitGlobal || "").trim();
-  if (!raw) return "";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
-}
-
 function withCommunityRoom(url){
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}room=${encodeURIComponent(COMMUNITY_ROOM)}`;
@@ -446,25 +437,15 @@ function setupCommunityPolling(){
 }
 
 function setupLiveScoresSync(){
-  const liveApi = getLiveMatchesApi();
-  if (!liveApi) return;
-  pullLiveScores(liveApi).catch(() => {});
+  if (!LIVE_MATCHES_API) return;
+  pullLiveScores().catch(() => {});
   setInterval(() => {
-    pullLiveScores(getLiveMatchesApi()).catch(() => {});
+    pullLiveScores().catch(() => {});
   }, 45000);
 }
 
-function getLiveMatchesApi(){
-  try {
-    return resolveLiveScoresApi() || "";
-  } catch {
-    return "";
-  }
-}
-
-async function pullLiveScores(liveApi){
-  if (!liveApi) return;
-  const response = await fetch(liveApi, { cache: "no-store" });
+async function pullLiveScores(){
+  const response = await fetch(LIVE_MATCHES_API, { cache: "no-store" });
   if (!response.ok) return;
   const payload = await response.json();
   const entries = Array.isArray(payload) ? payload : Array.isArray(payload?.matches) ? payload.matches : [];
