@@ -6,6 +6,9 @@ const PORT = Number(process.env.COMMUNITY_PORT || process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
 const DB_FILE = process.env.COMMUNITY_DB_FILE || path.join(__dirname, "data", "community-sync.json");
 const WEB_ROOT = process.env.COMMUNITY_WEB_ROOT || __dirname;
+const FIFA_SOURCE_URL = process.env.FIFA_SOURCE_URL
+  || "https://www.fifa.com/fr/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures?country=&wtw-filter=ALL";
+const FIFA_CACHE_TTL_MS = Number(process.env.FIFA_CACHE_TTL_MS || 60000);
 
 let roomsState = { global: { updatedAt: 0, snapshot: null } };
 const streamClients = new Map();
@@ -94,6 +97,15 @@ function boot(){
       return;
     }
 
+    if (isPath(pathname, ["/api/fifa/live", "/fifa/live"]) && req.method === "GET") {
+      try {
+        const payload = await getFifaLivePayload();
+        return sendJson(res, 200, payload);
+      } catch (err) {
+        return sendJson(res, 502, { ok: false, error: "fifa_unavailable", detail: err?.message || String(err) });
+      }
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(req, res);
     }
@@ -117,6 +129,18 @@ function parseRequestUrl(urlValue){
     return new URL(urlValue || "/", "http://localhost");
   } catch {
     return new URL("/", "http://localhost");
+  }
+  return roomsState[room];
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
   }
   return roomsState[room];
 }
@@ -396,4 +420,104 @@ function getMimeType(filePath){
     case ".webmanifest": return "application/manifest+json; charset=utf-8";
     default: return "application/octet-stream";
   }
+}
+
+async function getFifaLivePayload(){
+  const now = Date.now();
+  if (now - fifaCache.fetchedAt < FIFA_CACHE_TTL_MS) return fifaCache.payload;
+  const html = await fetchTextWithTimeout(FIFA_SOURCE_URL, 12000);
+  const matches = extractFifaMatches(html);
+  const payload = {
+    source: FIFA_SOURCE_URL,
+    fetchedAt: new Date().toISOString(),
+    matches
+  };
+  fifaCache = { fetchedAt: now, payload };
+  return payload;
+}
+
+async function fetchTextWithTimeout(url, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (community-sync-bridge)" }
+    });
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractFifaMatches(html){
+  const candidates = [];
+  const nextDataMatch = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch?.[1]) candidates.push(safeJsonParse(nextDataMatch[1]));
+  const ldJsonMatches = [...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
+  for (const m of ldJsonMatches) candidates.push(safeJsonParse(m[1]));
+
+  const extracted = [];
+  for (const candidate of candidates.filter(Boolean)) {
+    extracted.push(...collectMatchObjects(candidate));
+  }
+  return normalizeFifaMatches(extracted);
+}
+
+function collectMatchObjects(node, bag = []){
+  if (!node || typeof node !== "object") return bag;
+  if (Array.isArray(node)) {
+    for (const entry of node) collectMatchObjects(entry, bag);
+    return bag;
+  }
+  const hasTeams = node.homeTeam || node.awayTeam || node.home || node.away || node.participants;
+  const hasScore = node.score || node.homeScore || node.awayScore || node.result || node.status;
+  if (hasTeams && hasScore) bag.push(node);
+  for (const value of Object.values(node)) collectMatchObjects(value, bag);
+  return bag;
+}
+
+function normalizeFifaMatches(entries){
+  const normalized = [];
+  for (const item of entries) {
+    const idRaw = item.id ?? item.matchId ?? item.fixtureId ?? item.code;
+    const id = Number(idRaw);
+    if (!Number.isFinite(id)) continue;
+    const homeName = extractTeamName(item.homeTeam || item.home || item.participants?.[0] || item.teams?.[0]);
+    const awayName = extractTeamName(item.awayTeam || item.away || item.participants?.[1] || item.teams?.[1]);
+    const scoreHome = extractScore(item, "home");
+    const scoreAway = extractScore(item, "away");
+    normalized.push({
+      id,
+      home: homeName || null,
+      away: awayName || null,
+      scoreHome: Number.isFinite(scoreHome) ? scoreHome : null,
+      scoreAway: Number.isFinite(scoreAway) ? scoreAway : null,
+      status: item.status || item.matchStatus || item.stage || null,
+      date: item.utcDate || item.date || item.startDate || null
+    });
+  }
+  const dedup = new Map();
+  for (const match of normalized) dedup.set(match.id, match);
+  return [...dedup.values()].sort((a, b) => a.id - b.id);
+}
+
+function extractTeamName(teamNode){
+  if (!teamNode) return "";
+  if (typeof teamNode === "string") return teamNode;
+  return String(teamNode.name || teamNode.shortName || teamNode.teamName || teamNode.displayName || "").trim();
+}
+
+function extractScore(item, side){
+  const sideKey = side === "home" ? "home" : "away";
+  const direct = Number(item?.[`${sideKey}Score`] ?? item?.score?.[sideKey] ?? item?.result?.[sideKey]);
+  if (Number.isFinite(direct)) return direct;
+  const teams = Array.isArray(item?.score?.teams) ? item.score.teams : Array.isArray(item?.result?.teams) ? item.result.teams : null;
+  if (teams?.length >= 2) {
+    const index = side === "home" ? 0 : 1;
+    const value = Number(teams[index]?.score ?? teams[index]?.goals);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
 }

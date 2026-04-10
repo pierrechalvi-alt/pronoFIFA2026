@@ -52,6 +52,23 @@ window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
 - `COMMUNITY_ROOM` => espace de synchro partagé entre les utilisateurs.
 - Redirection canonique désactivée => évite les boucles quand l'URL tunnel change.
 
+### Bridge FIFA intégré
+
+Le backend expose maintenant un bridge live :
+
+- `GET /api/fifa/live`
+
+Ce bridge tente de parser la page FIFA configurée et renvoie un JSON standard :
+
+```json
+{ "source": "...", "fetchedAt": "...", "matches": [{ "id": 73, "scoreHome": 1, "scoreAway": 0 }] }
+```
+
+Variables optionnelles :
+
+- `FIFA_SOURCE_URL` : URL FIFA source
+- `FIFA_CACHE_TTL_MS` : durée de cache du bridge (par défaut 60000)
+
 ## Vérification rapide
 
 Depuis un navigateur mobile :
