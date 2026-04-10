@@ -18,7 +18,6 @@ const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
 const COMMUNITY_ROOM = resolveCommunityRoom();
-const LIVE_MATCHES_API = resolveLiveScoresApi();
 
 const state = {
   me: null,
@@ -377,15 +376,6 @@ function resolveCommunityRoom(){
   const explicitLocalStorage = readStorageItem("fwc26_community_room");
   const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || "global").trim().toLowerCase();
   return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
-}
-
-function resolveLiveScoresApi(){
-  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26LiveApi");
-  const explicitMeta = document.querySelector('meta[name="fwc26-live-api"]')?.content;
-  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_LIVE_MATCHES_API__ : null;
-  const raw = String(explicitQuery || explicitMeta || explicitGlobal || "").trim();
-  if (!raw) return "";
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
 function withCommunityRoom(url){
