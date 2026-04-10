@@ -43,6 +43,8 @@ Le fichier est maintenant neutre pour le mode tunnel :
 ```js
 window.__FWC26_CANONICAL_ORIGIN__ = "";
 window.__FWC26_COMMUNITY_API__ = "";
+window.__FWC26_COMMUNITY_ROOM__ = "bureau";
+window.__FWC26_LIVE_MATCHES_API__ = "/api/fifa/live";
 window.__FWC26_COMMUNITY_ROOM__ = "global";
 window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
 ```
