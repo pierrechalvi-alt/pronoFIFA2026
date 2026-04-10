@@ -2,6 +2,7 @@ const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
 const LS_KEY = "fwc26_pronos_v1";
+const SESSION_USER_KEY = "fwc26_last_user_key_v2";
 const DB_NAME = "fwc26_pronos_db";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
@@ -16,6 +17,8 @@ let communityPullInterval = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
+const COMMUNITY_ROOM = resolveCommunityRoom();
+const LIVE_MATCHES_API = resolveLiveScoresApi();
 
 const state = {
   me: null,
@@ -32,7 +35,22 @@ const state = {
 };
 
 registerServiceWorker();
-init();
+init().catch((err) => {
+  console.error("Erreur d'initialisation non gérée :", err);
+  if (APP) {
+    APP.innerHTML = `
+      <section class="card">
+        <h1>Chargement interrompu</h1>
+        <p>Le script principal a rencontré une erreur inattendue.</p>
+        <small>${escapeHtml(err?.message || "erreur inconnue")}</small>
+      </section>
+    `;
+  }
+  if (typeof window !== "undefined") {
+    window.__FWC26_LAST_BOOT_ERROR__ = String(err?.stack || err?.message || err || "unknown");
+  }
+  markBootReady();
+});
 
 function registerServiceWorker(){
   if (!("serviceWorker" in navigator)) return;
@@ -86,9 +104,11 @@ async function init(){
   setupCommunityRealtimeSync();
   setupCommunityPolling();
   startMatchLifecycleMonitor();
+  setupLiveScoresSync();
 
-  if (state.data?.lastUserKey) {
-    const u = state.data.users?.[state.data.lastUserKey];
+  const localUserKey = readStorageItem(SESSION_USER_KEY);
+  if (localUserKey) {
+    const u = state.data.users?.[localUserKey];
     if (u?.profile) {
       state.me = u.profile;
       state.onboardingStep = "app";
@@ -249,7 +269,7 @@ function userKey(profile){
 }
 
 function loadAll(){
-  const fallback = { users:{}, lastUserKey:null, thirdHalf:{ comments:[] }, updatedAt:0 };
+  const fallback = { users:{}, thirdHalf:{ comments:[] }, updatedAt:0 };
   try {
     const raw = readStorageItem(LS_KEY);
     const parsed = raw ? JSON.parse(raw) : fallback;
@@ -276,7 +296,21 @@ function normalizeDataShape(raw){
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
+  const lastReadAt = Number(parsed.notifications.lastReadAt || 0);
+  parsed.notifications.lastReadAt = Number.isFinite(lastReadAt) ? lastReadAt : 0;
+  parsed.notifications.unreadCount = computeUnreadCount(parsed.notifications);
   return parsed;
+}
+
+function computeUnreadCount(notifications){
+  const feed = Array.isArray(notifications?.feed) ? notifications.feed : [];
+  const lastReadAt = Number(notifications?.lastReadAt || 0);
+  let unread = 0;
+  for (const item of feed){
+    const createdAt = new Date(item?.createdAt || 0).getTime();
+    if (Number.isFinite(createdAt) && createdAt > lastReadAt) unread += 1;
+  }
+  return Math.min(99, unread);
 }
 
 async function hydrateDataStore(){
@@ -351,6 +385,29 @@ function resolveCommunityApiBase(){
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
+function resolveCommunityRoom(){
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Room");
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-room"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_ROOM__ : null;
+  const explicitLocalStorage = readStorageItem("fwc26_community_room");
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || "global").trim().toLowerCase();
+  return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function resolveLiveScoresApi(){
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26LiveApi");
+  const explicitMeta = document.querySelector('meta[name="fwc26-live-api"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_LIVE_MATCHES_API__ : null;
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || "").trim();
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function withCommunityRoom(url){
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}room=${encodeURIComponent(COMMUNITY_ROOM)}`;
+}
+
 async function hydrateCommunitySnapshot(){
   if (!COMMUNITY_API_BASE) return;
   try {
@@ -363,7 +420,7 @@ async function hydrateCommunitySnapshot(){
 function setupCommunityRealtimeSync(){
   if (!COMMUNITY_API_BASE || typeof EventSource === "undefined") return;
   try {
-    communityStream = new EventSource(`${COMMUNITY_API_BASE}/api/stream`);
+    communityStream = new EventSource(withCommunityRoom(`${COMMUNITY_API_BASE}/api/stream`));
     communityStream.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
@@ -389,8 +446,39 @@ function setupCommunityPolling(){
   }, 12000);
 }
 
+function setupLiveScoresSync(){
+  if (!LIVE_MATCHES_API) return;
+  pullLiveScores().catch(() => {});
+  setInterval(() => {
+    pullLiveScores().catch(() => {});
+  }, 45000);
+}
+
+async function pullLiveScores(){
+  const response = await fetch(LIVE_MATCHES_API, { cache: "no-store" });
+  if (!response.ok) return;
+  const payload = await response.json();
+  const entries = Array.isArray(payload) ? payload : Array.isArray(payload?.matches) ? payload.matches : [];
+  if (!entries.length) return;
+  let changed = false;
+  for (const item of entries){
+    const match = getMatchById(item.id);
+    if (!match) continue;
+    if (Number.isFinite(Number(item.scoreHome)) && Number.isFinite(Number(item.scoreAway))) {
+      const nextHome = Number(item.scoreHome);
+      const nextAway = Number(item.scoreAway);
+      if (match.scoreHome !== nextHome || match.scoreAway !== nextAway) {
+        match.scoreHome = nextHome;
+        match.scoreAway = nextAway;
+        changed = true;
+      }
+    }
+  }
+  if (changed) render();
+}
+
 async function pullCommunitySnapshot(source){
-  const response = await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, { cache: "no-store" });
+  const response = await fetch(withCommunityRoom(`${COMMUNITY_API_BASE}/api/snapshot`), { cache: "no-store" });
   if (!response.ok) return;
   const payload = await response.json();
   if (!payload?.snapshot) return;
@@ -410,11 +498,12 @@ function queueCommunitySnapshotPush(){
 async function pushCommunitySnapshot(){
   if (!COMMUNITY_API_BASE) return;
   try {
-    await fetch(`${COMMUNITY_API_BASE}/api/snapshot`, {
+    await fetch(withCommunityRoom(`${COMMUNITY_API_BASE}/api/snapshot`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clientId: CLIENT_ID,
+        room: COMMUNITY_ROOM,
         updatedAt: Number(state.data?.updatedAt || Date.now()),
         snapshot: state.data
       })
@@ -435,10 +524,24 @@ function broadcastSnapshot(){
 
 function integrateIncomingData(incomingRaw, source){
   const incoming = normalizeDataShape(incomingRaw);
+  const previousFeed = Array.isArray(state.data?.notifications?.feed) ? state.data.notifications.feed : [];
+  const previousCommentIds = new Set((state.data?.thirdHalf?.comments || []).map((item) => item.id));
   const merged = mergeSnapshots(state.data, incoming);
   if (JSON.stringify(merged) === JSON.stringify(state.data)) return;
+  const incomingNotifications = (merged.notifications?.feed || []).filter((item) => !previousFeed.some((existing) => existing.id === item.id));
+  const incomingComments = (merged.thirdHalf?.comments || []).filter((item) => !previousCommentIds.has(item.id));
   state.data = merged;
   persistSnapshot(false);
+  if (source !== "storage" && source !== "indexeddb") {
+    for (const item of incomingNotifications.slice(0, 2)) {
+      if (item?.title || item?.body) showToast(`${item.title || "Notification"} — ${item.body || ""}`.trim());
+    }
+    for (const comment of incomingComments.slice(0, 2)) {
+      if (comment?.authorLabel && comment?.text) {
+        showToast(`💬 ${comment.authorLabel} : ${comment.text.slice(0, 60)}${comment.text.length > 60 ? "…" : ""}`);
+      }
+    }
+  }
   if (state.me) render();
 }
 
@@ -458,7 +561,8 @@ function mergeSnapshots(baseRaw, incomingRaw){
       ...incomingUser,
       profile: incomingUser.profile || existingUser.profile,
       picks: { ...(existingUser.picks || {}), ...(incomingUser.picks || {}) },
-      qualifiers: { ...(existingUser.qualifiers || {}), ...(incomingUser.qualifiers || {}) }
+      qualifiers: { ...(existingUser.qualifiers || {}), ...(incomingUser.qualifiers || {}) },
+      r32Slots: { ...(existingUser.r32Slots || {}), ...(incomingUser.r32Slots || {}) }
     };
   }
 
@@ -495,10 +599,9 @@ function mergeSnapshots(baseRaw, incomingRaw){
     },
     notifications: {
       feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
-      unreadCount: Math.max(Number(base.notifications?.unreadCount || 0), Number(incoming.notifications?.unreadCount || 0)),
+      lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
-    lastUserKey: incoming.lastUserKey || base.lastUserKey,
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
 }
@@ -552,6 +655,7 @@ function requestPersistentStorage(){
 
 function ensureUser(){
   const key = userKey(state.me);
+  let shouldPersist = false;
   if (!state.data.users[key]) {
     state.data.users[key] = {
       profile: state.me,
@@ -565,10 +669,13 @@ function ensureUser(){
       tieBreakerSubmittedAt: null,
       flashLockedAt: null
     };
+    shouldPersist = true;
   }
+  const picksBeforeSanitize = JSON.stringify(state.data.users[key].picks || {});
   sanitizeUserPicks(state.data.users[key]);
-  state.data.lastUserKey = key;
-  saveAll();
+  if (picksBeforeSanitize !== JSON.stringify(state.data.users[key].picks || {})) shouldPersist = true;
+  if (readStorageItem(SESSION_USER_KEY) !== key) writeStorageItem(SESSION_USER_KEY, key);
+  if (shouldPersist) saveAll();
   return state.data.users[key];
 }
 function currentUser(){
@@ -585,7 +692,7 @@ function setUser(profile){
 function logout(){
   state.me = null;
   state.onboardingStep = "welcome";
-  state.data.lastUserKey = null;
+  writeStorageItem(SESSION_USER_KEY, "");
   saveAll();
   render();
 }
@@ -642,6 +749,16 @@ function setQualifier(group, which, team){
   if (!u) return;
   if (!u.qualifiers[group]) u.qualifiers[group] = { first:null, second:null };
   u.qualifiers[group][which] = team || null;
+  saveAll();
+}
+
+function setR32SlotTeam(matchId, side, team){
+  const u = currentUser();
+  if (!u) return;
+  if (!u.r32Slots || typeof u.r32Slots !== "object") u.r32Slots = {};
+  const key = `${Number(matchId)}_${side}`;
+  if (!team) delete u.r32Slots[key];
+  else u.r32Slots[key] = team;
   saveAll();
 }
 
@@ -764,7 +881,7 @@ function renderWelcome(){
     if ((existing.password || "") !== password) return alert("Mot de passe incorrect.");
     state.me = existing.profile;
     state.onboardingStep = "app";
-    state.data.lastUserKey = key;
+    writeStorageItem(SESSION_USER_KEY, key);
     saveAll();
     render();
   };
@@ -801,7 +918,7 @@ function renderPredictionJourney(){
   return `
     <section class="card">
       <h1>Fais tes pronostics Coupe du Monde 2026</h1>
-      <p><b>Barème rapide :</b> Poules bon résultat = 1 pt, 32e = 2 pts, 16e = 4 pts, 8e = 8 pts, 1/4 = 16 pts, 1/2 = 32 pts, Finale vainqueur = 64 pts.</p>
+      <p><b>Barème rapide :</b> Poules bon résultat = 1 pt, 16e = 2 pts, 8e = 4 pts, Quarts = 8 pts, Demies = 16 pts, Finale vainqueur = 32 pts.</p>
       <div class="progress"><div class="progress-bar" style="width:${Math.round((done / total) * 100)}%"></div></div>
       <small>${done}/${total} matchs complétés.</small>
     </section>
@@ -971,7 +1088,47 @@ function renderKO(){
   if (!ko.length) return `<p><small>Aucun match KO listé.</small></p>`;
   return `
     <p>Tableau final face-à-face (entonnoir). Choisis le qualifié de chaque duel.</p>
+    ${renderR32QualifierConfigurator(currentUser())}
     ${renderBracketFunnel(currentUser(), true)}
+  `;
+}
+
+function renderR32QualifierConfigurator(userData){
+  const r32Rules = R32_SLOT_RULES.filter((rule) => getMatchById(rule.id));
+  if (!r32Rules.length) return "";
+  const slots = userData?.r32Slots || {};
+  return `
+    <section class="card" style="padding:12px; margin:10px 0">
+      <h3>Configuration des affiches des 16es</h3>
+      <small>Tu peux imposer les qualifiés (1ers, 2es et meilleurs 3es) pour construire ton tableau.</small>
+      <div class="grid" style="margin-top:10px">
+        ${r32Rules.map((rule) => {
+          const homeOptions = resolveR32RuleOptions(rule.home, userData);
+          const awayOptions = resolveR32RuleOptions(rule.away, userData);
+          const homeValue = slots[`${rule.id}_home`] || resolveR32RuleAutoTeam(rule.home, userData) || "";
+          const awayValue = slots[`${rule.id}_away`] || resolveR32RuleAutoTeam(rule.away, userData) || "";
+          return `
+            <article class="group-card" style="padding:10px">
+              <b>Match ${rule.id}</b>
+              <div class="field" style="margin-top:6px">
+                <label>${escapeHtml(rule.home.label)}</label>
+                <select data-r32-match="${rule.id}" data-r32-side="home">
+                  <option value="">Auto (${escapeHtml(resolveR32RuleAutoTeam(rule.home, userData) || "À définir")})</option>
+                  ${homeOptions.map((team) => `<option value="${escapeAttr(team)}" ${team === homeValue ? "selected" : ""}>${escapeHtml(team)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field" style="margin-top:6px">
+                <label>${escapeHtml(rule.away.label)}</label>
+                <select data-r32-match="${rule.id}" data-r32-side="away">
+                  <option value="">Auto (${escapeHtml(resolveR32RuleAutoTeam(rule.away, userData) || "À définir")})</option>
+                  ${awayOptions.map((team) => `<option value="${escapeAttr(team)}" ${team === awayValue ? "selected" : ""}>${escapeHtml(team)}</option>`).join("")}
+                </select>
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -1461,6 +1618,11 @@ function submitThirdHalfReply(commentId){
     text,
     createdAt: new Date().toISOString()
   });
+  pushAppNotification({
+    type: "bistro_reply",
+    title: "Nouvelle réponse au Bistro",
+    body: `${me.profile.firstName} a répondu : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
+  });
   saveAll();
   render();
 }
@@ -1878,19 +2040,60 @@ function computeAutoQualifiers(userData){
 }
 
 function getR32TeamsForMatch(matchId, userData){
-  const slots = [
-    "A1","B2","C1","D2","E1","F2","G1","H2",
-    "I1","J2","K1","L2","A2","B1","C2","D1",
-    "E2","F1","G2","H1","I2","J1","K2","L1",
-    "BT1","BT8","BT2","BT7","BT3","BT6","BT4","BT5"
-  ];
-  const index = (Number(matchId) - 73) * 2;
-  if (index < 0 || index >= slots.length) return null;
-  const auto = computeAutoQualifiers(userData).qualifiers;
+  const rule = R32_SLOT_RULES.find((item) => item.id === Number(matchId));
+  if (!rule) return null;
+  const selected = userData?.r32Slots || {};
+  const homeAuto = resolveR32RuleAutoTeam(rule.home, userData);
+  const awayAuto = resolveR32RuleAutoTeam(rule.away, userData);
   return {
-    homeLabel: auto[slots[index]] || slots[index],
-    awayLabel: auto[slots[index + 1]] || slots[index + 1]
+    homeLabel: selected[`${rule.id}_home`] || homeAuto || rule.home.label,
+    awayLabel: selected[`${rule.id}_away`] || awayAuto || rule.away.label
   };
+}
+
+const R32_SLOT_RULES = [
+  { id: 73, home: { type: "rank", group: "C", rank: 1, label: "1er Groupe C" }, away: { type: "rank", group: "F", rank: 2, label: "2e Groupe F" } },
+  { id: 74, home: { type: "rank", group: "E", rank: 1, label: "1er Groupe E" }, away: { type: "thirdPool", groups: ["A", "B", "C", "D", "F"], label: "Meilleur 3e (A/B/C/D/F)" } },
+  { id: 75, home: { type: "rank", group: "F", rank: 1, label: "1er Groupe F" }, away: { type: "rank", group: "C", rank: 2, label: "2e Groupe C" } },
+  { id: 76, home: { type: "rank", group: "E", rank: 2, label: "2e Groupe E" }, away: { type: "rank", group: "I", rank: 2, label: "2e Groupe I" } },
+  { id: 77, home: { type: "rank", group: "I", rank: 1, label: "1er Groupe I" }, away: { type: "thirdPool", groups: ["C", "D", "E", "F", "G", "H"], label: "Meilleur 3e (C/D/E/F/G/H)" } },
+  { id: 78, home: { type: "rank", group: "A", rank: 1, label: "1er Groupe A" }, away: { type: "thirdPool", groups: ["C", "E", "F", "H", "J"], label: "Meilleur 3e (C/E/F/H/J)" } },
+  { id: 79, home: { type: "rank", group: "L", rank: 1, label: "1er Groupe L" }, away: { type: "thirdPool", groups: ["E", "H", "I", "J", "K"], label: "Meilleur 3e (E/H/I/J/K)" } },
+  { id: 80, home: { type: "rank", group: "G", rank: 1, label: "1er Groupe G" }, away: { type: "thirdPool", groups: ["B", "E", "F", "I", "J"], label: "Meilleur 3e (B/E/F/I/J)" } },
+  { id: 81, home: { type: "rank", group: "H", rank: 1, label: "1er Groupe H" }, away: { type: "rank", group: "J", rank: 2, label: "2e Groupe J" } },
+  { id: 82, home: { type: "rank", group: "K", rank: 1, label: "1er Groupe K" }, away: { type: "thirdPool", groups: ["E", "F", "G", "I", "J"], label: "Meilleur 3e (E/F/G/I/J)" } },
+  { id: 83, home: { type: "rank", group: "D", rank: 2, label: "2e Groupe D" }, away: { type: "rank", group: "G", rank: 2, label: "2e Groupe G" } },
+  { id: 84, home: { type: "rank", group: "J", rank: 1, label: "1er Groupe J" }, away: { type: "rank", group: "H", rank: 2, label: "2e Groupe H" } },
+  { id: 85, home: { type: "rank", group: "K", rank: 1, label: "1er Groupe K" }, away: { type: "thirdPool", groups: ["D", "E", "I", "J", "L"], label: "Meilleur 3e (D/E/I/J/L)" } },
+  { id: 86, home: { type: "rank", group: "B", rank: 1, label: "1er Groupe B" }, away: { type: "rank", group: "A", rank: 2, label: "2e Groupe A" } },
+  { id: 87, home: { type: "rank", group: "D", rank: 1, label: "1er Groupe D" }, away: { type: "rank", group: "L", rank: 2, label: "2e Groupe L" } },
+  { id: 88, home: { type: "rank", group: "I", rank: 2, label: "2e Groupe I" }, away: { type: "rank", group: "B", rank: 2, label: "2e Groupe B" } }
+];
+
+function resolveR32RuleAutoTeam(rule, userData){
+  const standings = computeGroupStandingsFromPicks(userData);
+  if (rule.type === "rank") {
+    const rankIndex = Math.max(0, Number(rule.rank || 1) - 1);
+    return standings[rule.group]?.[rankIndex]?.team || null;
+  }
+  const candidates = resolveR32RuleOptions(rule, userData);
+  if (!candidates.length) return null;
+  return candidates[0];
+}
+
+function resolveR32RuleOptions(rule, userData){
+  const standings = computeGroupStandingsFromPicks(userData);
+  if (rule.type === "rank") {
+    return (state.teams?.teamsByGroup?.[rule.group] || []).slice();
+  }
+  if (rule.type === "thirdPool") {
+    return (rule.groups || [])
+      .map((group) => standings[group]?.[2])
+      .filter(Boolean)
+      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || a.team.localeCompare(b.team))
+      .map((entry) => entry.team);
+  }
+  return [];
 }
 
 function getMatchDisplayTeams(userData, match){
@@ -2019,6 +2222,12 @@ function wireHubControls(){
   for (const btn of document.querySelectorAll("[data-reply-comment]")){
     btn.onclick = () => submitThirdHalfReply(btn.dataset.replyComment);
   }
+  for (const sel of document.querySelectorAll("select[data-r32-match]")){
+    sel.onchange = (e) => {
+      setR32SlotTeam(e.target.dataset.r32Match, e.target.dataset.r32Side, e.target.value || null);
+      render();
+    };
+  }
 }
 
 function listLiveResults(){
@@ -2055,7 +2264,7 @@ function computeLeaderboard(){
 
 function getPointsWeight(match){
   if (match.stage === "GROUP") return 1;
-  const weights = { R32: 2, R16: 4, QF: 16, SF: 32, BRONZE: 16, FINAL: 64 };
+  const weights = { R32: 2, R16: 4, QF: 8, SF: 16, BRONZE: 8, FINAL: 32 };
   return weights[match.round] || 0;
 }
 
@@ -2100,6 +2309,15 @@ function generateFlashGrid(){
   for (const match of allMatches){
     const options = match.stage === "GROUP" ? ["H", "D", "A"] : ["H", "A"];
     u.picks[String(match.id)] = randomPick(options);
+  }
+  u.r32Slots = {};
+  for (const rule of R32_SLOT_RULES){
+    const homeOptions = resolveR32RuleOptions(rule.home, u);
+    const awayOptions = resolveR32RuleOptions(rule.away, u);
+    const autoHome = resolveR32RuleAutoTeam(rule.home, u);
+    const autoAway = resolveR32RuleAutoTeam(rule.away, u);
+    u.r32Slots[`${rule.id}_home`] = homeOptions.length ? randomPick(homeOptions) : (autoHome || "");
+    u.r32Slots[`${rule.id}_away`] = awayOptions.length ? randomPick(awayOptions) : (autoAway || "");
   }
   u.flashLockedAt = new Date().toISOString();
   saveAll();
@@ -2271,7 +2489,7 @@ function pushAppNotification({ type, title, body, uniqueKey }){
     createdAt: new Date().toISOString()
   });
   state.data.notifications.feed = state.data.notifications.feed.slice(0, 50);
-  state.data.notifications.unreadCount = Math.min(99, Number(state.data.notifications.unreadCount || 0) + 1);
+  state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   showToast(`${title || "Notification"} — ${body || ""}`.trim());
   sendBrowserNotification(title || "Notification", body || "");
   return true;
@@ -2317,7 +2535,8 @@ function openNotificationsCenter(){
       .join("\n");
     alert(`Notifications récentes:\n\n${preview}`);
   }
-  if (state.data.notifications) state.data.notifications.unreadCount = 0;
+  if (state.data.notifications) state.data.notifications.lastReadAt = Date.now();
+  if (state.data.notifications) state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
   saveAll();
   render();
 }

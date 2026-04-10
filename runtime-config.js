@@ -8,6 +8,8 @@
 // Laisse vide pour utiliser automatiquement l'origin courante.
 window.__FWC26_CANONICAL_ORIGIN__ = "";
 window.__FWC26_COMMUNITY_API__ = "";
+window.__FWC26_COMMUNITY_ROOM__ = "bureau";
+window.__FWC26_LIVE_MATCHES_API__ = "/api/fifa/live";
 
 // En tunnel Cloudflare l'URL peut changer : on évite les redirections forcées.
 window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
