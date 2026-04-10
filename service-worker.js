@@ -1,4 +1,4 @@
-const CACHE_NAME = "pronos-fifa-2026-v2";
+const CACHE_NAME = "pronos-fifa-2026-v3";
 const APP_SHELL_URLS = [
   "./",
   "./index.html",
@@ -34,8 +34,9 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
+  const isAppShellResource = APP_SHELL_URLS.some((entry) => url.pathname.endsWith(entry.replace("./", "/")));
   const isRuntimeConfig = url.pathname.endsWith("/runtime-config.js") || url.pathname === "/runtime-config.js";
-  if (isRuntimeConfig) {
+  if (isRuntimeConfig || isAppShellResource) {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {
