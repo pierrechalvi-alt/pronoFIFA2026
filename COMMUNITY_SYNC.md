@@ -28,6 +28,13 @@ https://abcde.trycloudflare.com/
 ```
 
 > Important : tous les appareils doivent utiliser exactement la même URL front.
+> Et le même **room** de synchro (par défaut `global`).
+
+Exemple avec room explicite :
+
+```text
+https://abcde.trycloudflare.com/?fwc26Room=bureau
+```
 
 ## runtime-config.js
 
@@ -36,24 +43,51 @@ Le fichier est maintenant neutre pour le mode tunnel :
 ```js
 window.__FWC26_CANONICAL_ORIGIN__ = "";
 window.__FWC26_COMMUNITY_API__ = "";
+window.__FWC26_COMMUNITY_ROOM__ = "bureau";
+window.__FWC26_LIVE_MATCHES_API__ = "/api/fifa/live";
 window.__FWC26_DISABLE_CANONICAL_REDIRECT__ = "true";
 ```
 
 - `CANONICAL_ORIGIN` vide => pas de redirection forcée.
 - `COMMUNITY_API` vide => l'app utilise automatiquement l'origin courante.
+- `COMMUNITY_ROOM` => espace de synchro partagé entre les utilisateurs.
+- `LIVE_MATCHES_API` => endpoint JSON optionnel pour injecter les scores en direct (`[{id,scoreHome,scoreAway}]` ou `{matches:[...]}`).
 - Redirection canonique désactivée => évite les boucles quand l'URL tunnel change.
+
+### Bridge FIFA intégré
+
+Le backend expose maintenant un bridge live :
+
+- `GET /api/fifa/live`
+
+Ce bridge tente de parser la page FIFA configurée et renvoie un JSON standard :
+
+```json
+{ "source": "...", "fetchedAt": "...", "matches": [{ "id": 73, "scoreHome": 1, "scoreAway": 0 }] }
+```
+
+Variables optionnelles :
+
+- `FIFA_SOURCE_URL` : URL FIFA source
+- `FIFA_CACHE_TTL_MS` : durée de cache du bridge (par défaut 60000)
 
 ## Vérification rapide
 
 Depuis un navigateur mobile :
 
 - `https://abcde.trycloudflare.com/api/health` → doit renvoyer `{"ok":true,...}`
-- `https://abcde.trycloudflare.com/api/snapshot` → doit renvoyer un snapshot JSON
+- `https://abcde.trycloudflare.com/api/snapshot?room=bureau` → doit renvoyer un snapshot JSON
 
 Test fonctionnel :
 1. Mobile A modifie un pronostic.
 2. Mobile B recharge.
 3. La même donnée doit apparaître.
+
+## Stabilité inter-navigateurs (mise à jour)
+
+- Le flux temps réel (`/api/stream`) envoie maintenant des **heartbeats SSE** réguliers pour éviter les coupures silencieuses sur certains proxys/réseaux mobiles.
+- Le service worker privilégie désormais le **network-first** pour le shell applicatif (`index.html`, `app.js`, `data/*`) afin d'éviter qu'un navigateur reste bloqué sur une ancienne version.
+- Les notifications sont marquées comme lues via un horodatage partagé (`lastReadAt`), ce qui évite que le compteur revienne après synchronisation sur un autre appareil.
 
 ## Si ça ne synchronise toujours pas
 
