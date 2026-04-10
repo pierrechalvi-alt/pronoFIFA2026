@@ -12,8 +12,12 @@ const FIFA_CACHE_TTL_MS = Number(process.env.FIFA_CACHE_TTL_MS || 60000);
 
 let roomsState = { global: { updatedAt: 0, snapshot: null } };
 const streamClients = new Map();
+let snapshotState = {
+  updatedAt: 0,
+  snapshot: null
+};
+const clients = new Set();
 let heartbeatInterval = null;
-let fifaCache = { fetchedAt: 0, payload: { source: FIFA_SOURCE_URL, matches: [] } };
 
 boot();
 
@@ -81,6 +85,13 @@ function boot(){
       req.on("close", () => {
         roomClients.delete(res);
         if (roomClients.size === 0) streamClients.delete(room);
+      clients.add(res);
+      ensureHeartbeat();
+      if (snapshotState.snapshot) {
+        res.write(`data: ${JSON.stringify(snapshotState)}\n\n`);
+      }
+      req.on("close", () => {
+        clients.delete(res);
         stopHeartbeatIfIdle();
       });
       return;
@@ -119,6 +130,55 @@ function parseRequestUrl(urlValue){
   } catch {
     return new URL("/", "http://localhost");
   }
+  return roomsState[room];
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
+}
+
+function resolveRoom(rawRoom){
+  const candidate = String(rawRoom || "global").trim().toLowerCase();
+  return candidate.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+}
+
+function getRoomState(room){
+  if (!roomsState[room]) {
+    roomsState[room] = { updatedAt: 0, snapshot: null };
+  }
+  return roomsState[room];
 }
 
 function resolveRoom(rawRoom){
@@ -335,6 +395,28 @@ function ensureHeartbeat(){
 
 function stopHeartbeatIfIdle(){
   if (streamClients.size > 0) return;
+  if (!heartbeatInterval) return;
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
+}
+
+function ensureHeartbeat(){
+  if (heartbeatInterval) return;
+  heartbeatInterval = setInterval(() => {
+    const beat = `event: heartbeat\ndata: {"ts":${Date.now()}}\n\n`;
+    for (const client of clients) {
+      try {
+        client.write(beat);
+      } catch {
+        clients.delete(client);
+      }
+    }
+    stopHeartbeatIfIdle();
+  }, 15000);
+}
+
+function stopHeartbeatIfIdle(){
+  if (clients.size > 0) return;
   if (!heartbeatInterval) return;
   clearInterval(heartbeatInterval);
   heartbeatInterval = null;
