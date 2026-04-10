@@ -49,7 +49,6 @@
       const reason = event?.reason?.stack || event?.reason?.message || String(event?.reason || "Promesse rejetée inconnue");
       window.__FWC26_BOOT_STATUS__.errors.push(`unhandledrejection: ${reason}`);
     });
-    window.__FWC26_BOOT_STATUS__ = { ready: false };
     setTimeout(async () => {
       if (window.__FWC26_BOOT_STATUS__?.ready) return;
       const appRoot = document.getElementById("app");
@@ -82,6 +81,5 @@
     }, 2800);
   </script>
   <script defer src="./app.js"></script>
-  <script type="module" src="./app.js"></script>
 </body>
 </html>

@@ -18,6 +18,7 @@ const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
 const COMMUNITY_API_BASE = resolveCommunityApiBase();
 const COMMUNITY_ROOM = resolveCommunityRoom();
+const LIVE_MATCHES_API = resolveLiveMatchesApi();
 
 const state = {
   me: null,
@@ -122,6 +123,13 @@ function markBootReady(){
   if (typeof window !== "undefined" && window.__FWC26_BOOT_STATUS__) {
     window.__FWC26_BOOT_STATUS__.ready = true;
   }
+}
+
+function resolveLiveMatchesApi(){
+  const explicitMeta = document.querySelector('meta[name="fwc26-live-matches-api"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_LIVE_MATCHES_API__ : null;
+  const raw = String(explicitMeta || explicitGlobal || "").trim();
+  return raw || "";
 }
 
 function resolveCanonicalAppOrigin(){
