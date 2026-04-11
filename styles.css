@@ -370,6 +370,19 @@ input:focus, select:focus, textarea:focus{border-color: #0c59cf; box-shadow: 0 0
 
 .footer{max-width:1100px;margin:0 auto;padding:0 16px 26px;color: var(--muted);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center}
 .footer .sep{opacity:.5}
+.footer-delete-account{
+  border:1px solid #be123c;
+  background:#fff1f2;
+  color:#9f1239;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.footer-delete-account:hover{
+  background:#ffe4e6;
+}
 small{color:var(--muted)}
 code{color:#0c59cf}
 

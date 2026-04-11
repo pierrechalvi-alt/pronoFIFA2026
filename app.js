@@ -1,11 +1,13 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
-const LS_KEY = "fwc26_pronos_v1";
-const SESSION_USER_KEY = "fwc26_last_user_key_v2";
-const DB_NAME = "fwc26_pronos_db";
+const LS_KEY = "fwc26_pronos_v2";
+const SESSION_USER_KEY = "fwc26_last_user_key_v3";
+const DB_NAME = "fwc26_pronos_db_v2";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
+const USERS_RESET_VERSION_KEY = "fwc26_users_reset_version";
+const USERS_RESET_VERSION = "2026-04-clean-1";
 const memoryStorage = { value: null };
 let matchLifecycleInterval = null;
 const CLIENT_ID = `client_${Math.random().toString(36).slice(2, 9)}`;
@@ -101,12 +103,14 @@ async function init(){
   await hydrateDataStore();
   await ensureCommunityApiAvailability();
   await hydrateCommunitySnapshot();
+  applyForcedUsersResetIfNeeded();
   requestPersistentStorage();
   setupRealtimeSync();
   setupCommunityRealtimeSync();
   setupCommunityPolling();
   startMatchLifecycleMonitor();
   setupLiveScoresSync();
+  wireFooterActions();
 
   resetSessionOnBoot();
   state.selectedGroup = state.teams?.groups?.[0] || "A";
@@ -359,10 +363,72 @@ function writeStorageItem(key, value){
   } catch {}
 }
 
+function applyForcedUsersResetIfNeeded(){
+  const alreadyApplied = readStorageItem(USERS_RESET_VERSION_KEY);
+  if (alreadyApplied === USERS_RESET_VERSION) return;
+  state.data = normalizeDataShape({
+    ...state.data,
+    users: {},
+    updatedAt: Date.now()
+  });
+  writeStorageItem(USERS_RESET_VERSION_KEY, USERS_RESET_VERSION);
+  saveAll();
+}
+
 function resetSessionOnBoot(){
   state.me = null;
   state.onboardingStep = "welcome";
   writeStorageItem(SESSION_USER_KEY, "");
+}
+
+function wireFooterActions(){
+  const footer = document.querySelector(".footer");
+  if (!footer) return;
+  let deleteBtn = document.getElementById("deleteAccountFooterBtn");
+  if (!deleteBtn) {
+    deleteBtn = document.createElement("button");
+    deleteBtn.id = "deleteAccountFooterBtn";
+    deleteBtn.type = "button";
+    deleteBtn.className = "footer-delete-account";
+    deleteBtn.title = "Supprimer mon compte";
+    deleteBtn.textContent = "🗑️ Supprimer mon compte";
+    footer.appendChild(deleteBtn);
+  }
+  if (deleteBtn.dataset.bound === "1") return;
+  deleteBtn.dataset.bound = "1";
+  deleteBtn.addEventListener("click", deleteMyAccount);
+}
+
+function deleteMyAccount(){
+  const me = currentUser();
+  if (!me?.profile) {
+    alert("Connecte-toi d'abord pour supprimer ton compte.");
+    return;
+  }
+  const key = userKey(me.profile);
+  if (!confirm("Supprimer définitivement ton compte et tes pronostics ?")) return;
+
+  if (state.data.users?.[key]) delete state.data.users[key];
+
+  if (Array.isArray(state.data.thirdHalf?.comments)) {
+    state.data.thirdHalf.comments = state.data.thirdHalf.comments
+      .filter((comment) => comment?.userKey !== key)
+      .map((comment) => ({
+        ...comment,
+        likes: Object.fromEntries(Object.entries(comment.likes || {}).filter(([likeKey]) => likeKey !== key)),
+        replies: Array.isArray(comment.replies)
+          ? comment.replies.filter((reply) => reply?.userKey !== key)
+          : []
+      }));
+  }
+
+  if (state.selectedLeaderboardUserKey === key) state.selectedLeaderboardUserKey = null;
+  state.me = null;
+  state.onboardingStep = "welcome";
+  writeStorageItem(SESSION_USER_KEY, "");
+  saveAll();
+  render();
+  alert("Ton compte a été supprimé.");
 }
 
 function setupRealtimeSync(){
@@ -404,6 +470,43 @@ function resolveStoredCommunityApiBase(){
   const raw = String(readStorageItem("fwc26_community_api") || "").trim();
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function hasExplicitCommunityApiConfig(){
+  const queryValue = new URLSearchParams(window?.location?.search || "").get("fwc26Api");
+  const metaValue = document.querySelector('meta[name="fwc26-community-api"]')?.content;
+  const globalValue = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
+  return Boolean(String(queryValue || metaValue || globalValue || "").trim());
+}
+
+async function pingCommunityHealth(baseUrl){
+  if (!baseUrl) return false;
+  try {
+    const response = await fetch(withCommunityRoom(`${baseUrl}/api/health`), { cache: "no-store" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureCommunityApiAvailability(){
+  const explicitConfig = hasExplicitCommunityApiConfig();
+  const primaryBase = COMMUNITY_API_BASE;
+  const fallbackBase = COMMUNITY_API_STORED_FALLBACK;
+
+  if (primaryBase && await pingCommunityHealth(primaryBase)) {
+    writeStorageItem("fwc26_community_api", primaryBase);
+    return;
+  }
+
+  if (explicitConfig && fallbackBase && fallbackBase !== primaryBase && await pingCommunityHealth(fallbackBase)) {
+    COMMUNITY_API_BASE = fallbackBase;
+    writeStorageItem("fwc26_community_api", fallbackBase);
+    return;
+  }
+
+  COMMUNITY_API_BASE = "";
+  writeStorageItem("fwc26_community_api", "");
 }
 
 function resolveCommunityRoom(){
