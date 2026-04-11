@@ -397,9 +397,11 @@ function resolveCommunityApiBase(){
 }
 
 function resolveCommunityRoom(){
-  // Room unique pour toute la communauté afin que tous les joueurs
-  // voient les mêmes utilisateurs et les mêmes commentaires.
-  return "global";
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Room");
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-room"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_ROOM__ : null;
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || "global").trim().toLowerCase();
+  return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
 }
 
 function withCommunityRoom(url){
