@@ -395,6 +395,8 @@ function wireFooterActions(){
     footer.appendChild(deleteBtn);
   }
   if (deleteBtn.dataset.bound === "1") return;
+  const deleteBtn = document.getElementById("deleteAccountFooterBtn");
+  if (!deleteBtn || deleteBtn.dataset.bound === "1") return;
   deleteBtn.dataset.bound = "1";
   deleteBtn.addEventListener("click", deleteMyAccount);
 }
