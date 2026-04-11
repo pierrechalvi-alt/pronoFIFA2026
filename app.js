@@ -110,6 +110,7 @@ async function init(){
   setupCommunityPolling();
   startMatchLifecycleMonitor();
   setupLiveScoresSync();
+  wireFooterActions();
 
   resetSessionOnBoot();
   state.selectedGroup = state.teams?.groups?.[0] || "A";
@@ -380,6 +381,45 @@ function resetSessionOnBoot(){
   writeStorageItem(SESSION_USER_KEY, "");
 }
 
+function wireFooterActions(){
+  const deleteBtn = document.getElementById("deleteAccountFooterBtn");
+  if (!deleteBtn || deleteBtn.dataset.bound === "1") return;
+  deleteBtn.dataset.bound = "1";
+  deleteBtn.addEventListener("click", deleteMyAccount);
+}
+
+function deleteMyAccount(){
+  const me = currentUser();
+  if (!me?.profile) {
+    alert("Connecte-toi d'abord pour supprimer ton compte.");
+    return;
+  }
+  const key = userKey(me.profile);
+  if (!confirm("Supprimer définitivement ton compte et tes pronostics ?")) return;
+
+  if (state.data.users?.[key]) delete state.data.users[key];
+
+  if (Array.isArray(state.data.thirdHalf?.comments)) {
+    state.data.thirdHalf.comments = state.data.thirdHalf.comments
+      .filter((comment) => comment?.userKey !== key)
+      .map((comment) => ({
+        ...comment,
+        likes: Object.fromEntries(Object.entries(comment.likes || {}).filter(([likeKey]) => likeKey !== key)),
+        replies: Array.isArray(comment.replies)
+          ? comment.replies.filter((reply) => reply?.userKey !== key)
+          : []
+      }));
+  }
+
+  if (state.selectedLeaderboardUserKey === key) state.selectedLeaderboardUserKey = null;
+  state.me = null;
+  state.onboardingStep = "welcome";
+  writeStorageItem(SESSION_USER_KEY, "");
+  saveAll();
+  render();
+  alert("Ton compte a été supprimé.");
+}
+
 function setupRealtimeSync(){
   window.addEventListener("storage", (event) => {
     if (event.key !== LS_KEY || !event.newValue) return;
@@ -419,6 +459,43 @@ function resolveStoredCommunityApiBase(){
   const raw = String(readStorageItem("fwc26_community_api") || "").trim();
   if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function hasExplicitCommunityApiConfig(){
+  const queryValue = new URLSearchParams(window?.location?.search || "").get("fwc26Api");
+  const metaValue = document.querySelector('meta[name="fwc26-community-api"]')?.content;
+  const globalValue = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
+  return Boolean(String(queryValue || metaValue || globalValue || "").trim());
+}
+
+async function pingCommunityHealth(baseUrl){
+  if (!baseUrl) return false;
+  try {
+    const response = await fetch(withCommunityRoom(`${baseUrl}/api/health`), { cache: "no-store" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureCommunityApiAvailability(){
+  const explicitConfig = hasExplicitCommunityApiConfig();
+  const primaryBase = COMMUNITY_API_BASE;
+  const fallbackBase = COMMUNITY_API_STORED_FALLBACK;
+
+  if (primaryBase && await pingCommunityHealth(primaryBase)) {
+    writeStorageItem("fwc26_community_api", primaryBase);
+    return;
+  }
+
+  if (explicitConfig && fallbackBase && fallbackBase !== primaryBase && await pingCommunityHealth(fallbackBase)) {
+    COMMUNITY_API_BASE = fallbackBase;
+    writeStorageItem("fwc26_community_api", fallbackBase);
+    return;
+  }
+
+  COMMUNITY_API_BASE = "";
+  writeStorageItem("fwc26_community_api", "");
 }
 
 function resolveCommunityRoom(){
