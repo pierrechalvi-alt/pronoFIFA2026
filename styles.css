@@ -125,6 +125,13 @@ body{
   position:relative;
   min-width:58px;
 }
+.guest-userbox{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  gap:8px;
+}
 .notif-dot{
   display:inline-flex;
   align-items:center;
@@ -240,6 +247,58 @@ input:focus, select:focus, textarea:focus{border-color: #0c59cf; box-shadow: 0 0
   opacity:0;
   transform:translateY(8px);
   transition:opacity .2s ease, transform .2s ease;
+}
+.notification-overlay{
+  position:fixed;
+  inset:0;
+  z-index:1200;
+  background:rgba(15,23,42,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+.notification-panel{
+  width:min(560px, 100%);
+  max-height:80vh;
+  overflow:auto;
+}
+.notification-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.notification-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  gap:8px;
+}
+.notification-item{
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  padding:10px;
+}
+.notification-item p{
+  margin:4px 0;
+  color:var(--text);
+}
+.notification-empty{
+  border:1px dashed var(--line);
+  border-radius:12px;
+  padding:14px;
+  text-align:center;
+  color:var(--muted);
+  background:#fff;
+}
+.notification-actions{
+  margin-top:12px;
+  display:flex;
+  justify-content:flex-end;
 }
 .app-toast.show{
   opacity:1;
