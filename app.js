@@ -290,6 +290,8 @@ function normalizeDataShape(raw){
   }));
   if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
   if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  const resetAllAt = Number(parsed.resetAllAt || 0);
+  parsed.resetAllAt = Number.isFinite(resetAllAt) ? resetAllAt : 0;
   if (!parsed.notifications || typeof parsed.notifications !== "object") {
     parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
   }
@@ -560,6 +562,12 @@ function integrateIncomingData(incomingRaw, source){
 function mergeSnapshots(baseRaw, incomingRaw){
   const base = normalizeDataShape(baseRaw);
   const incoming = normalizeDataShape(incomingRaw);
+  if (Number(incoming.resetAllAt || 0) > Number(base.resetAllAt || 0)) {
+    return normalizeDataShape({
+      ...incoming,
+      updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+    });
+  }
   const mergedUsers = { ...base.users };
 
   for (const [key, incomingUser] of Object.entries(incoming.users || {})){
@@ -613,6 +621,7 @@ function mergeSnapshots(baseRaw, incomingRaw){
       feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 12),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
+    resetAllAt: Math.max(Number(base.resetAllAt || 0), Number(incoming.resetAllAt || 0)),
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
 }
