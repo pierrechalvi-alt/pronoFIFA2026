@@ -382,19 +382,8 @@ function resetSessionOnBoot(){
 }
 
 function wireFooterActions(){
-  const footer = document.querySelector(".footer");
-  if (!footer) return;
-  let deleteBtn = document.getElementById("deleteAccountFooterBtn");
-  if (!deleteBtn) {
-    deleteBtn = document.createElement("button");
-    deleteBtn.id = "deleteAccountFooterBtn";
-    deleteBtn.type = "button";
-    deleteBtn.className = "footer-delete-account";
-    deleteBtn.title = "Supprimer mon compte";
-    deleteBtn.textContent = "🗑️ Supprimer mon compte";
-    footer.appendChild(deleteBtn);
-  }
-  if (deleteBtn.dataset.bound === "1") return;
+  const deleteBtn = document.getElementById("deleteAccountFooterBtn");
+  if (!deleteBtn || deleteBtn.dataset.bound === "1") return;
   deleteBtn.dataset.bound = "1";
   deleteBtn.addEventListener("click", deleteMyAccount);
 }
