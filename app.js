@@ -405,40 +405,11 @@ function resolveStoredCommunityApiBase(){
 }
 
 function resolveCommunityRoom(){
-  // Room unique pour toute la communauté afin que tous les joueurs
-  // voient les mêmes utilisateurs et les mêmes commentaires.
-  return "global";
-}
-
-async function ensureCommunityApiAvailability(){
-  const candidates = [...new Set([COMMUNITY_API_BASE, COMMUNITY_API_STORED_FALLBACK].filter(Boolean))];
-  if (!candidates.length) {
-    COMMUNITY_API_BASE = "";
-    return;
-  }
-  for (const candidate of candidates){
-    const reachable = await isCommunityApiReachable(candidate);
-    if (!reachable) continue;
-    COMMUNITY_API_BASE = candidate;
-    writeStorageItem("fwc26_community_api", candidate);
-    return;
-  }
-  COMMUNITY_API_BASE = "";
-}
-
-async function isCommunityApiReachable(base){
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const response = await fetch(withCommunityRoom(`${base}/api/health`), {
-      cache: "no-store",
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    return response.ok;
-  } catch {
-    return false;
-  }
+  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Room");
+  const explicitMeta = document.querySelector('meta[name="fwc26-community-room"]')?.content;
+  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_ROOM__ : null;
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || "global").trim().toLowerCase();
+  return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
 }
 
 function withCommunityRoom(url){
