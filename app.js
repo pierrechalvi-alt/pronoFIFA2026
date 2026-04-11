@@ -16,7 +16,8 @@ let communitySyncTimer = null;
 let communityPullInterval = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
-const COMMUNITY_API_BASE = resolveCommunityApiBase();
+let COMMUNITY_API_BASE = resolveCommunityApiBase();
+const COMMUNITY_API_STORED_FALLBACK = resolveStoredCommunityApiBase();
 const COMMUNITY_ROOM = resolveCommunityRoom();
 const LIVE_MATCHES_API = resolveLiveMatchesApi();
 
@@ -98,6 +99,7 @@ async function init(){
   }
 
   await hydrateDataStore();
+  await ensureCommunityApiAvailability();
   await hydrateCommunitySnapshot();
   requestPersistentStorage();
   setupRealtimeSync();
@@ -393,6 +395,12 @@ function resolveCommunityApiBase(){
     }
     return "";
   }
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function resolveStoredCommunityApiBase(){
+  const raw = String(readStorageItem("fwc26_community_api") || "").trim();
+  if (!raw) return "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
