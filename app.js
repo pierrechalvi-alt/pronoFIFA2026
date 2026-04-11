@@ -1,9 +1,9 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
-const LS_KEY = "fwc26_pronos_v1";
-const SESSION_USER_KEY = "fwc26_last_user_key_v2";
-const DB_NAME = "fwc26_pronos_db";
+const LS_KEY = "fwc26_pronos_v2";
+const SESSION_USER_KEY = "fwc26_last_user_key_v3";
+const DB_NAME = "fwc26_pronos_db_v2";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
 const memoryStorage = { value: null };
