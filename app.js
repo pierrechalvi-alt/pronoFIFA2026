@@ -1,11 +1,13 @@
 const APP = document.getElementById("app");
 const USERBOX = document.getElementById("userBox");
 
-const LS_KEY = "fwc26_pronos_v1";
-const SESSION_USER_KEY = "fwc26_last_user_key_v2";
-const DB_NAME = "fwc26_pronos_db";
+const LS_KEY = "fwc26_pronos_v2";
+const SESSION_USER_KEY = "fwc26_last_user_key_v3";
+const DB_NAME = "fwc26_pronos_db_v2";
 const DB_STORE = "snapshots";
 const DB_RECORD_ID = "latest";
+const USERS_RESET_VERSION_KEY = "fwc26_users_reset_version";
+const USERS_RESET_VERSION = "2026-04-clean-1";
 const memoryStorage = { value: null };
 let matchLifecycleInterval = null;
 const CLIENT_ID = `client_${Math.random().toString(36).slice(2, 9)}`;
@@ -101,6 +103,7 @@ async function init(){
   await hydrateDataStore();
   await ensureCommunityApiAvailability();
   await hydrateCommunitySnapshot();
+  applyForcedUsersResetIfNeeded();
   requestPersistentStorage();
   setupRealtimeSync();
   setupCommunityRealtimeSync();
@@ -357,6 +360,18 @@ function writeStorageItem(key, value){
   try {
     localStorage.setItem(key, value);
   } catch {}
+}
+
+function applyForcedUsersResetIfNeeded(){
+  const alreadyApplied = readStorageItem(USERS_RESET_VERSION_KEY);
+  if (alreadyApplied === USERS_RESET_VERSION) return;
+  state.data = normalizeDataShape({
+    ...state.data,
+    users: {},
+    updatedAt: Date.now()
+  });
+  writeStorageItem(USERS_RESET_VERSION_KEY, USERS_RESET_VERSION);
+  saveAll();
 }
 
 function resetSessionOnBoot(){
