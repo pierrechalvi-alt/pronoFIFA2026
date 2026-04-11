@@ -16,7 +16,8 @@ let communitySyncTimer = null;
 let communityPullInterval = null;
 const CANONICAL_APP_ORIGIN = resolveCanonicalAppOrigin();
 const CANONICAL_REDIRECT_DISABLED = isCanonicalRedirectDisabled();
-const COMMUNITY_API_BASE = resolveCommunityApiBase();
+let COMMUNITY_API_BASE = resolveCommunityApiBase();
+const COMMUNITY_API_STORED_FALLBACK = resolveStoredCommunityApiBase();
 const COMMUNITY_ROOM = resolveCommunityRoom();
 const LIVE_MATCHES_API = resolveLiveMatchesApi();
 
@@ -98,6 +99,7 @@ async function init(){
   }
 
   await hydrateDataStore();
+  await ensureCommunityApiAvailability();
   await hydrateCommunitySnapshot();
   requestPersistentStorage();
   setupRealtimeSync();
@@ -106,14 +108,7 @@ async function init(){
   startMatchLifecycleMonitor();
   setupLiveScoresSync();
 
-  const localUserKey = readStorageItem(SESSION_USER_KEY);
-  if (localUserKey) {
-    const u = state.data.users?.[localUserKey];
-    if (u?.profile) {
-      state.me = u.profile;
-      state.onboardingStep = "app";
-    }
-  }
+  resetSessionOnBoot();
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
   markBootReady();
@@ -295,6 +290,8 @@ function normalizeDataShape(raw){
   }));
   if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
   if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  const resetAllAt = Number(parsed.resetAllAt || 0);
+  parsed.resetAllAt = Number.isFinite(resetAllAt) ? resetAllAt : 0;
   if (!parsed.notifications || typeof parsed.notifications !== "object") {
     parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
   }
@@ -303,20 +300,26 @@ function normalizeDataShape(raw){
   if (!parsed.notifications.delivered || typeof parsed.notifications.delivered !== "object") {
     parsed.notifications.delivered = {};
   }
-  const lastReadAt = Number(parsed.notifications.lastReadAt || 0);
-  parsed.notifications.lastReadAt = Number.isFinite(lastReadAt) ? lastReadAt : 0;
+  parsed.notifications.feed = parsed.notifications.feed
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: item.id || `n_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: item.type || "generic",
+      title: item.title || "Notification",
+      body: item.body || "",
+      createdAt: item.createdAt || new Date().toISOString(),
+      unread: item.unread !== false
+    }))
+    .filter((item) => item.unread)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 12);
   parsed.notifications.unreadCount = computeUnreadCount(parsed.notifications);
   return parsed;
 }
 
 function computeUnreadCount(notifications){
   const feed = Array.isArray(notifications?.feed) ? notifications.feed : [];
-  const lastReadAt = Number(notifications?.lastReadAt || 0);
-  let unread = 0;
-  for (const item of feed){
-    const createdAt = new Date(item?.createdAt || 0).getTime();
-    if (Number.isFinite(createdAt) && createdAt > lastReadAt) unread += 1;
-  }
+  const unread = feed.reduce((count, item) => count + (item?.unread !== false ? 1 : 0), 0);
   return Math.min(99, unread);
 }
 
@@ -356,6 +359,12 @@ function writeStorageItem(key, value){
   } catch {}
 }
 
+function resetSessionOnBoot(){
+  state.me = null;
+  state.onboardingStep = "welcome";
+  writeStorageItem(SESSION_USER_KEY, "");
+}
+
 function setupRealtimeSync(){
   window.addEventListener("storage", (event) => {
     if (event.key !== LS_KEY || !event.newValue) return;
@@ -381,8 +390,7 @@ function resolveCommunityApiBase(){
   const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Api");
   const explicitMeta = document.querySelector('meta[name="fwc26-community-api"]')?.content;
   const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_API__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_community_api");
-  const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || CANONICAL_APP_ORIGIN || "").trim();
+  const raw = String(explicitQuery || explicitMeta || explicitGlobal || CANONICAL_APP_ORIGIN || "").trim();
   if (!raw) {
     if (window?.location?.protocol === "http:" || window?.location?.protocol === "https:") {
       return window.location.origin;
@@ -392,13 +400,47 @@ function resolveCommunityApiBase(){
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
+function resolveStoredCommunityApiBase(){
+  const raw = String(readStorageItem("fwc26_community_api") || "").trim();
+  if (!raw) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
 function resolveCommunityRoom(){
-  const explicitQuery = new URLSearchParams(window?.location?.search || "").get("fwc26Room");
-  const explicitMeta = document.querySelector('meta[name="fwc26-community-room"]')?.content;
-  const explicitGlobal = typeof window !== "undefined" ? window.__FWC26_COMMUNITY_ROOM__ : null;
-  const explicitLocalStorage = readStorageItem("fwc26_community_room");
-  const raw = String(explicitQuery || explicitMeta || explicitGlobal || explicitLocalStorage || "global").trim().toLowerCase();
-  return raw.replace(/[^a-z0-9_-]/g, "").slice(0, 64) || "global";
+  // Room unique pour toute la communauté afin que tous les joueurs
+  // voient les mêmes utilisateurs et les mêmes commentaires.
+  return "global";
+}
+
+async function ensureCommunityApiAvailability(){
+  const candidates = [...new Set([COMMUNITY_API_BASE, COMMUNITY_API_STORED_FALLBACK].filter(Boolean))];
+  if (!candidates.length) {
+    COMMUNITY_API_BASE = "";
+    return;
+  }
+  for (const candidate of candidates){
+    const reachable = await isCommunityApiReachable(candidate);
+    if (!reachable) continue;
+    COMMUNITY_API_BASE = candidate;
+    writeStorageItem("fwc26_community_api", candidate);
+    return;
+  }
+  COMMUNITY_API_BASE = "";
+}
+
+async function isCommunityApiReachable(base){
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const response = await fetch(withCommunityRoom(`${base}/api/health`), {
+      cache: "no-store",
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 function withCommunityRoom(url){
@@ -532,7 +574,10 @@ function integrateIncomingData(incomingRaw, source){
   persistSnapshot(false);
   if (source !== "storage" && source !== "indexeddb") {
     for (const item of incomingNotifications.slice(0, 2)) {
-      if (item?.title || item?.body) showToast(`${item.title || "Notification"} — ${item.body || ""}`.trim());
+      if (item?.title || item?.body) {
+        presentNotificationBanner(item);
+        sendBrowserNotification(item.title || "Notification", item.body || "");
+      }
     }
     for (const comment of incomingComments.slice(0, 2)) {
       if (comment?.authorLabel && comment?.text) {
@@ -546,6 +591,12 @@ function integrateIncomingData(incomingRaw, source){
 function mergeSnapshots(baseRaw, incomingRaw){
   const base = normalizeDataShape(baseRaw);
   const incoming = normalizeDataShape(incomingRaw);
+  if (Number(incoming.resetAllAt || 0) > Number(base.resetAllAt || 0)) {
+    return normalizeDataShape({
+      ...incoming,
+      updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+    });
+  }
   const mergedUsers = { ...base.users };
 
   for (const [key, incomingUser] of Object.entries(incoming.users || {})){
@@ -596,10 +647,10 @@ function mergeSnapshots(baseRaw, incomingRaw){
       comments: [...commentMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     },
     notifications: {
-      feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 50),
-      lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
+      feed: [...notifMap.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 12),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
+    resetAllAt: Math.max(Number(base.resetAllAt || 0), Number(incoming.resetAllAt || 0)),
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
 }
@@ -773,22 +824,27 @@ function render(){
        </button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
-    : `<div style="display:flex; justify-content:center; width:100%"><span class="badge">Non connecté</span></div>`;
+    : `<div class="guest-userbox">
+         <span class="badge">Non connecté</span>
+         <button class="btn alt notification-btn" id="notificationBtn" title="Notifications">
+           🔔 ${state.data.notifications?.unreadCount ? `<span class="notif-dot">${state.data.notifications.unreadCount}</span>` : ""}
+         </button>
+       </div>`;
 
-  if (state.me) {
-    queueMicrotask(()=>{
+  queueMicrotask(()=>{
+    const notificationBtn = document.getElementById("notificationBtn");
+    if (notificationBtn) notificationBtn.onclick = () => openNotificationsCenter();
+    if (state.me) {
       const b = document.getElementById("logoutBtn");
       if (b) b.onclick = logout;
       const trigger = document.getElementById("profileTrigger");
       const avatarInput = document.getElementById("avatarInput");
-      const notificationBtn = document.getElementById("notificationBtn");
       if (trigger && avatarInput) {
         trigger.onclick = () => avatarInput.click();
         avatarInput.onchange = (e) => handleAvatarUpload(e.target.files?.[0]);
       }
-      if (notificationBtn) notificationBtn.onclick = () => openNotificationsCenter();
-    });
-  }
+    }
+  });
 
   if (!state.me && state.onboardingStep === "welcome") return renderWelcome();
   return renderApp();
@@ -1565,8 +1621,8 @@ function submitThirdHalfComment(){
     });
     pushAppNotification({
       type: "bistro_post",
-      title: "Nouveau message au Bistro",
-      body: `${me.profile.firstName} a publié : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
+      title: "Nouveau message",
+      body: `${me.profile.firstName} a posté au Bistro.`
     });
     saveAll();
     render();
@@ -1618,8 +1674,8 @@ function submitThirdHalfReply(commentId){
   });
   pushAppNotification({
     type: "bistro_reply",
-    title: "Nouvelle réponse au Bistro",
-    body: `${me.profile.firstName} a répondu : ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
+    title: "Nouvelle réponse",
+    body: `${me.profile.firstName} a répondu au Bistro.`
   });
   saveAll();
   render();
@@ -2484,13 +2540,20 @@ function pushAppNotification({ type, title, body, uniqueKey }){
     type: type || "generic",
     title: title || "Notification",
     body: body || "",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    unread: true
   });
-  state.data.notifications.feed = state.data.notifications.feed.slice(0, 50);
+  state.data.notifications.feed = state.data.notifications.feed.slice(0, 12);
   state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
-  showToast(`${title || "Notification"} — ${body || ""}`.trim());
+  presentNotificationBanner({ type, title, body });
   sendBrowserNotification(title || "Notification", body || "");
   return true;
+}
+
+function presentNotificationBanner(item){
+  const title = item?.title || "Notification";
+  const body = item?.body || "";
+  showToast(`${title} · ${body}`.trim());
 }
 
 function showToast(message){
@@ -2524,19 +2587,51 @@ function sendBrowserNotification(title, body){
 }
 
 function openNotificationsCenter(){
-  const feed = state.data.notifications?.feed || [];
-  if (!feed.length) {
-    alert("Aucune notification pour le moment.");
-  } else {
-    const preview = feed.slice(0, 12)
-      .map((item) => `• ${item.title} — ${item.body} (${formatDate(item.createdAt)})`)
-      .join("\n");
-    alert(`Notifications récentes:\n\n${preview}`);
-  }
-  if (state.data.notifications) state.data.notifications.lastReadAt = Date.now();
-  if (state.data.notifications) state.data.notifications.unreadCount = computeUnreadCount(state.data.notifications);
+  closeNotificationsCenter();
+  const overlay = document.createElement("div");
+  overlay.id = "notificationOverlay";
+  overlay.className = "notification-overlay";
+  const feed = (state.data.notifications?.feed || []).filter((item) => item?.unread !== false).slice(0, 12);
+  const lines = feed.length
+    ? feed.map((item) => `
+      <li class="notification-item">
+        <strong>${escapeHtml(item.title || "Notification")}</strong>
+        <p>${escapeHtml(item.body || "")}</p>
+        <small>${escapeHtml(formatDate(item.createdAt))}</small>
+      </li>
+    `).join("")
+    : `<li class="notification-empty">Aucune notification non lue.</li>`;
+  overlay.innerHTML = `
+    <section class="notification-panel card">
+      <header class="notification-header">
+        <h2>Notifications non lues</h2>
+        <button class="btn alt" id="closeNotificationsBtn">Fermer</button>
+      </header>
+      <ul class="notification-list">${lines}</ul>
+      <div class="notification-actions">
+        <button class="btn primary" id="markAllReadBtn">Tout marquer comme lu</button>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById("closeNotificationsBtn")?.addEventListener("click", closeNotificationsCenter);
+  document.getElementById("markAllReadBtn")?.addEventListener("click", () => {
+    markAllNotificationsRead();
+    closeNotificationsCenter();
+    render();
+  });
+}
+
+function closeNotificationsCenter(){
+  const overlay = document.getElementById("notificationOverlay");
+  if (overlay) overlay.remove();
+}
+
+function markAllNotificationsRead(){
+  if (!state.data.notifications) return;
+  state.data.notifications.feed = [];
+  state.data.notifications.unreadCount = 0;
   saveAll();
-  render();
 }
 
 function startMatchLifecycleMonitor(){

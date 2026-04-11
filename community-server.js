@@ -63,6 +63,28 @@ function boot(){
       return sendJson(res, 200, { ok: true, room: targetRoom, updatedAt: nextState.updatedAt });
     }
 
+    if (isPath(pathname, ["/api/admin/reset", "/admin/reset"]) && req.method === "POST") {
+      const resetAt = Date.now();
+      const targetRoom = room;
+      const clearedSnapshot = normalizeDataShape({
+        users: {},
+        thirdHalf: { comments: [] },
+        notifications: { feed: [], unreadCount: 0, delivered: {} },
+        resetAllAt: resetAt,
+        updatedAt: resetAt
+      });
+      const nextState = { updatedAt: resetAt, snapshot: clearedSnapshot };
+      roomsState[targetRoom] = nextState;
+      persistSnapshotStore(roomsState);
+      broadcastToRoom(targetRoom, {
+        clientId: "admin_reset",
+        room: targetRoom,
+        updatedAt: nextState.updatedAt,
+        snapshot: nextState.snapshot
+      });
+      return sendJson(res, 200, { ok: true, room: targetRoom, resetAt });
+    }
+
     if (isPath(pathname, ["/api/stream", "/stream"]) && req.method === "GET") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -206,6 +228,8 @@ function normalizeDataShape(raw){
   }));
   if (!parsed.users || typeof parsed.users !== "object") parsed.users = {};
   if (!Number.isFinite(Number(parsed.updatedAt))) parsed.updatedAt = 0;
+  const resetAllAt = Number(parsed.resetAllAt || 0);
+  parsed.resetAllAt = Number.isFinite(resetAllAt) ? resetAllAt : 0;
   if (!parsed.notifications || typeof parsed.notifications !== "object") {
     parsed.notifications = { feed: [], unreadCount: 0, delivered: {} };
   }
@@ -233,6 +257,12 @@ function computeUnreadCount(notifications){
 function mergeSnapshots(baseRaw, incomingRaw){
   const base = normalizeDataShape(baseRaw);
   const incoming = normalizeDataShape(incomingRaw);
+  if (Number(incoming.resetAllAt || 0) > Number(base.resetAllAt || 0)) {
+    return normalizeDataShape({
+      ...incoming,
+      updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
+    });
+  }
   const mergedUsers = { ...base.users };
 
   for (const [key, incomingUser] of Object.entries(incoming.users || {})) {
@@ -284,6 +314,7 @@ function mergeSnapshots(baseRaw, incomingRaw){
       lastReadAt: Math.max(Number(base.notifications?.lastReadAt || 0), Number(incoming.notifications?.lastReadAt || 0)),
       delivered: { ...(base.notifications?.delivered || {}), ...(incoming.notifications?.delivered || {}) }
     },
+    resetAllAt: Math.max(Number(base.resetAllAt || 0), Number(incoming.resetAllAt || 0)),
     lastUserKey: incoming.lastUserKey || base.lastUserKey,
     updatedAt: Math.max(Number(base.updatedAt || 0), Number(incoming.updatedAt || 0))
   });
