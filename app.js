@@ -382,6 +382,19 @@ function resetSessionOnBoot(){
 }
 
 function wireFooterActions(){
+  const footer = document.querySelector(".footer");
+  if (!footer) return;
+  let deleteBtn = document.getElementById("deleteAccountFooterBtn");
+  if (!deleteBtn) {
+    deleteBtn = document.createElement("button");
+    deleteBtn.id = "deleteAccountFooterBtn";
+    deleteBtn.type = "button";
+    deleteBtn.className = "footer-delete-account";
+    deleteBtn.title = "Supprimer mon compte";
+    deleteBtn.textContent = "🗑️ Supprimer mon compte";
+    footer.appendChild(deleteBtn);
+  }
+  if (deleteBtn.dataset.bound === "1") return;
   const deleteBtn = document.getElementById("deleteAccountFooterBtn");
   if (!deleteBtn || deleteBtn.dataset.bound === "1") return;
   deleteBtn.dataset.bound = "1";
@@ -885,6 +898,7 @@ function render(){
        <button class="btn alt notification-btn" id="notificationBtn" title="Notifications">
          🔔 ${state.data.notifications?.unreadCount ? `<span class="notif-dot">${state.data.notifications.unreadCount}</span>` : ""}
        </button>
+       <button class="btn danger" id="deleteAccountTopBtn" title="Supprimer mon compte">🗑️ Compte</button>
        <input id="avatarInput" type="file" accept="image/*" style="display:none" />
        <button class="btn" id="logoutBtn" style="margin-left:10px">Déconnexion</button>`
     : `<div class="guest-userbox">
@@ -900,6 +914,8 @@ function render(){
     if (state.me) {
       const b = document.getElementById("logoutBtn");
       if (b) b.onclick = logout;
+      const deleteTopBtn = document.getElementById("deleteAccountTopBtn");
+      if (deleteTopBtn) deleteTopBtn.onclick = deleteMyAccount;
       const trigger = document.getElementById("profileTrigger");
       const avatarInput = document.getElementById("avatarInput");
       if (trigger && avatarInput) {
