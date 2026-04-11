@@ -106,14 +106,7 @@ async function init(){
   startMatchLifecycleMonitor();
   setupLiveScoresSync();
 
-  const localUserKey = readStorageItem(SESSION_USER_KEY);
-  if (localUserKey) {
-    const u = state.data.users?.[localUserKey];
-    if (u?.profile) {
-      state.me = u.profile;
-      state.onboardingStep = "app";
-    }
-  }
+  resetSessionOnBoot();
   state.selectedGroup = state.teams?.groups?.[0] || "A";
   render();
   markBootReady();
@@ -354,6 +347,12 @@ function writeStorageItem(key, value){
   try {
     localStorage.setItem(key, value);
   } catch {}
+}
+
+function resetSessionOnBoot(){
+  state.me = null;
+  state.onboardingStep = "welcome";
+  writeStorageItem(SESSION_USER_KEY, "");
 }
 
 function setupRealtimeSync(){
