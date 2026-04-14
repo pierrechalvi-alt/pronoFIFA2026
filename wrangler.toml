@@ -1,0 +1,12 @@
+name = "prono-fifa-2026"
+main = "worker/index.mjs"
+compatibility_date = "2026-04-11"
+
+[durable_objects]
+bindings = [
+  { name = "SYNC_ROOM", class_name = "SyncRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SyncRoom"]
